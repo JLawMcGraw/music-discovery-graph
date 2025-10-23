@@ -5,13 +5,13 @@ export default function Home() {
     <main className="flex min-h-screen flex-col items-center justify-center p-24">
       <div className="max-w-5xl w-full">
         <h1 className="text-6xl font-bold mb-6 bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
-          Signal
+          DeepCuts
         </h1>
         <p className="text-2xl text-gray-300 mb-8">
-          The Trust Graph for Music Discovery
+          Dig Deeper with Trusted Curators
         </p>
         <p className="text-lg text-gray-400 mb-8 max-w-2xl">
-          Discover music through trusted humans, not algorithms. Stake your reputation on recommendations that matter.
+          Go beyond the algorithm. Discover music from curators who stake their reputation on every recommendation.
         </p>
         <div className="flex gap-4">
           <Link

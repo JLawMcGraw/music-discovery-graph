@@ -5,8 +5,8 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Signal - The Trust Graph for Music Discovery',
-  description: 'Discover music through trusted humans, not algorithms',
+  title: 'DeepCuts - Dig Deeper with Trusted Curators',
+  description: 'Music recommendations staked on reputation. Discover deep cuts from curators you trust, not algorithms.',
 }
 
 export default function RootLayout({

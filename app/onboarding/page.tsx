@@ -102,7 +102,7 @@ export default function OnboardingPage() {
           <div className="space-y-6 bg-gray-800 p-8 rounded-lg">
             <div>
               <h2 className="text-3xl font-bold mb-2 text-white">Choose Your Identity</h2>
-              <p className="text-gray-400">This is how others will recognize you on Signal.</p>
+              <p className="text-gray-400">This is how others will recognize you on DeepCuts.</p>
             </div>
 
             <div>

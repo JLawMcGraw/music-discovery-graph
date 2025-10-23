@@ -61,7 +61,7 @@ export default function SignUpPage() {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
-            Join Signal
+            Join DeepCuts
           </h1>
           <p className="text-gray-400">Start building your trust as a music curator</p>
         </div>
