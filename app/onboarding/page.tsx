@@ -27,6 +27,9 @@ export default function OnboardingPage() {
   // Step 3: Genre Preferences
   const [selectedGenres, setSelectedGenres] = useState<string[]>([])
 
+  // Step 4: Curation Statement
+  const [curationStatement, setCurationStatement] = useState('')
+
   const handleGenreToggle = (genre: string) => {
     if (selectedGenres.includes(genre)) {
       setSelectedGenres(selectedGenres.filter((g) => g !== genre))
@@ -58,6 +61,7 @@ export default function OnboardingPage() {
         username: username.toLowerCase().trim(),
         display_name: displayName.trim() || username,
         bio: bio.trim() || null,
+        curation_statement: curationStatement.trim() || null,
         genre_preferences: selectedGenres,
         onboarded: true,
       })
@@ -86,13 +90,13 @@ export default function OnboardingPage() {
         {/* Progress */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-400">Step {step} of 3</span>
-            <span className="text-sm text-gray-400">{Math.round((step / 3) * 100)}%</span>
+            <span className="text-sm text-gray-400">Step {step} of 4</span>
+            <span className="text-sm text-gray-400">{Math.round((step / 4) * 100)}%</span>
           </div>
           <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-purple-600 to-pink-600 transition-all duration-300"
-              style={{ width: `${(step / 3) * 100}%` }}
+              style={{ width: `${(step / 4) * 100}%` }}
             />
           </div>
         </div>
@@ -242,8 +246,62 @@ export default function OnboardingPage() {
                 Back
               </button>
               <button
-                onClick={handleComplete}
+                onClick={() => setStep(4)}
                 disabled={loading || selectedGenres.length === 0}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 text-white font-semibold rounded-lg transition-all disabled:cursor-not-allowed"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Curation Statement */}
+        {step === 4 && (
+          <div className="space-y-6 bg-gray-800 p-8 rounded-lg">
+            <div>
+              <h2 className="text-3xl font-bold mb-2 text-white">How Do You Curate?</h2>
+              <p className="text-gray-400">
+                Help others understand your approach to music discovery.
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="curation-statement" className="block text-sm font-medium text-gray-300 mb-2">
+                Curation Statement <span className="text-gray-500">(optional but recommended)</span>
+                <span className="text-gray-500 ml-2">({curationStatement.length}/500)</span>
+              </label>
+              <textarea
+                id="curation-statement"
+                value={curationStatement}
+                onChange={(e) => setCurationStatement(e.target.value)}
+                rows={6}
+                maxLength={500}
+                className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="Examples:&#10;• I dig for rare soul and funk 45s from regional labels&#10;• I focus on contemporary classical music that pushes boundaries&#10;• I curate indie folk with literary lyrics and unusual instrumentation&#10;• I share 90s hip hop deep cuts and forgotten producers"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                What makes your taste unique? What do you look for in music? This helps people decide if they should follow you.
+              </p>
+            </div>
+
+            {error && (
+              <div className="bg-red-900/20 border border-red-500 rounded-lg p-4 text-red-400 text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setStep(3)}
+                disabled={loading}
+                className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleComplete}
+                disabled={loading}
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 text-white font-semibold rounded-lg transition-all disabled:cursor-not-allowed"
               >
                 {loading ? 'Creating Profile...' : 'Complete Setup'}
