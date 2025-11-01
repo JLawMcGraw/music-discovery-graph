@@ -14,7 +14,7 @@ const createDropSchema = z.object({
   context: z.string().min(50, 'Context must be at least 50 characters').max(2000),
   listening_notes: z.string().max(1000).optional(),
   genres: z.array(z.string()).optional(),
-  mood_tags: z.array(z.string()).optional(),
+  moods: z.array(z.string()).optional(),
 })
 
 export async function POST(request: Request) {

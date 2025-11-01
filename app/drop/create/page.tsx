@@ -82,7 +82,7 @@ export default function CreateDropPage() {
           context,
           listening_notes: listeningNotes || undefined,
           genres: genres ? genres.split(',').map(g => g.trim()) : undefined,
-          mood_tags: moods ? moods.split(',').map(m => m.trim()) : undefined,
+          moods: moods ? moods.split(',').map(m => m.trim()) : undefined,
         }),
       })
 
