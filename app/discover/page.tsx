@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Image from 'next/image'
+import { DiscoverFilters } from '@/components/DiscoverFilters'
 
 export const dynamic = 'force-dynamic'
 
@@ -104,56 +105,7 @@ export default async function DiscoverPage({
         </div>
 
         {/* Filters */}
-        <div className="bg-gray-800 rounded-lg p-6 mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Genre Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Filter by Genre
-              </label>
-              <select
-                value={selectedGenre || ''}
-                onChange={(e) => {
-                  const url = new URL(window.location.href)
-                  if (e.target.value) {
-                    url.searchParams.set('genre', e.target.value)
-                  } else {
-                    url.searchParams.delete('genre')
-                  }
-                  window.location.href = url.toString()
-                }}
-                className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="">All Genres</option>
-                {uniqueGenres.map((genre) => (
-                  <option key={genre} value={genre}>
-                    {genre}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Sort Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Sort by
-              </label>
-              <select
-                value={sortBy}
-                onChange={(e) => {
-                  const url = new URL(window.location.href)
-                  url.searchParams.set('sort', e.target.value)
-                  window.location.href = url.toString()
-                }}
-                className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="followers">Most Followers</option>
-                <option value="active">Most Active</option>
-                <option value="new">Newest Curators</option>
-              </select>
-            </div>
-          </div>
-        </div>
+        <DiscoverFilters genres={uniqueGenres} />
 
         {/* Curators Grid */}
         {curators.length > 0 ? (
