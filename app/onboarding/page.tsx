@@ -1,68 +1,107 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import Step1Identity from '@/components/onboarding/Step1Identity'
+import Step2TasteDevelopment from '@/components/onboarding/Step2TasteDevelopment'
+import Step3CuratorChoice from '@/components/onboarding/Step3CuratorChoice'
+import Step4CurationStatement from '@/components/onboarding/Step4CurationStatement'
+import Step5RecommendedCurators from '@/components/onboarding/Step5RecommendedCurators'
 
-const GENRE_OPTIONS = [
-  'Rock', 'Pop', 'Hip Hop', 'R&B', 'Electronic', 'Jazz', 'Classical',
-  'Country', 'Folk', 'Metal', 'Punk', 'Indie', 'Alternative',
-  'Soul', 'Funk', 'Reggae', 'Blues', 'Latin', 'K-Pop', 'J-Pop',
-  'Lo-Fi', 'Ambient', 'House', 'Techno', 'Drum & Bass', 'Dubstep'
-]
+interface OnboardingData {
+  username: string
+  display_name: string
+  bio: string
+  selectedGenres: string[]
+  discoveryPreferences: string[]
+  favoriteArtists: string[]
+  isCurator: boolean
+  curationStatement: string
+}
 
 export default function OnboardingPage() {
-  const router = useRouter()
   const [step, setStep] = useState(1)
-  const [loading, setLoading] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [savingProfile, setSavingProfile] = useState(false)
 
-  // Step 1: Username
-  const [username, setUsername] = useState('')
-  const [displayName, setDisplayName] = useState('')
+  const [data, setData] = useState<OnboardingData>({
+    username: '',
+    display_name: '',
+    bio: '',
+    selectedGenres: [],
+    discoveryPreferences: [],
+    favoriteArtists: [],
+    isCurator: true,
+    curationStatement: '',
+  })
 
-  // Step 2: Bio
-  const [bio, setBio] = useState('')
-
-  // Step 3: Genre Preferences
-  const [selectedGenres, setSelectedGenres] = useState<string[]>([])
-
-  // Step 4: Curation Statement
-  const [curationStatement, setCurationStatement] = useState('')
-
-  const handleGenreToggle = (genre: string) => {
-    if (selectedGenres.includes(genre)) {
-      setSelectedGenres(selectedGenres.filter((g) => g !== genre))
-    } else {
-      if (selectedGenres.length < 5) {
-        setSelectedGenres([...selectedGenres, genre])
+  useEffect(() => {
+    // Get current user
+    const getCurrentUser = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        setUserId(user.id)
       }
+    }
+    getCurrentUser()
+  }, [])
+
+  const updateData = (updates: Partial<OnboardingData>) => {
+    setData((prev) => ({ ...prev, ...updates }))
+  }
+
+  const nextStep = () => {
+    setStep((prev) => prev + 1)
+  }
+
+  const prevStep = () => {
+    setStep((prev) => prev - 1)
+  }
+
+  const handleStepTransition = async (fromStep: number) => {
+    // If moving from step 3 to 4/5, check if we need to skip step 4
+    if (fromStep === 3) {
+      if (data.isCurator) {
+        setStep(4) // Go to curation statement
+      } else {
+        // Listener: skip curation statement, save profile, go to recommendations
+        await saveProfile()
+      }
+    }
+    // If moving from step 4 (curation statement), save profile then go to step 5
+    else if (fromStep === 4) {
+      await saveProfile()
+    }
+    else {
+      nextStep()
     }
   }
 
-  const handleComplete = async () => {
+  const saveProfile = async () => {
+    if (!userId) {
+      setError('Not authenticated')
+      return
+    }
+
+    setSavingProfile(true)
     setError(null)
-    setLoading(true)
 
     try {
       const supabase = createClient()
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        throw new Error('Not authenticated')
-      }
-
       // Create profile
       const { error: profileError } = await supabase.from('profiles').insert({
-        id: user.id,
-        username: username.toLowerCase().trim(),
-        display_name: displayName.trim() || username,
-        bio: bio.trim() || null,
-        curation_statement: curationStatement.trim() || null,
-        genre_preferences: selectedGenres,
+        id: userId,
+        username: data.username.toLowerCase().trim(),
+        display_name: data.display_name.trim() || data.username,
+        bio: data.bio.trim() || null,
+        curation_statement: data.curationStatement.trim() || null,
+        genre_preferences: data.selectedGenres,
+        is_curator: data.isCurator,
+        discovery_preferences: data.discoveryPreferences,
+        favorite_artists: data.favoriteArtists,
         onboarded: true,
       })
 
@@ -70,244 +109,145 @@ export default function OnboardingPage() {
         throw profileError
       }
 
-      // Redirect to feed
-      router.push('/feed')
+      // Insert taste profile (all selected genres with default 'discovering' level)
+      if (data.selectedGenres.length > 0) {
+        const tasteProfileEntries = data.selectedGenres.map(genre => ({
+          user_id: userId,
+          genre: genre,
+          experience_level: 'discovering' // Default level, will be updated automatically as user creates drops
+        }))
+
+        const { error: tasteError } = await supabase
+          .from('taste_profile')
+          .insert(tasteProfileEntries)
+
+        if (tasteError) {
+          console.error('Taste profile error:', tasteError)
+          // Don't throw - profile is already created
+        }
+      }
+
+      // Move to recommendations step
+      setStep(5)
     } catch (err: any) {
       if (err.code === '23505') {
-        // Unique constraint violation
         setError('Username already taken. Please choose another.')
+        setStep(1) // Go back to step 1
       } else {
         setError(err instanceof Error ? err.message : 'An error occurred')
       }
     } finally {
-      setLoading(false)
+      setSavingProfile(false)
     }
+  }
+
+  const getTotalSteps = () => {
+    return data.isCurator ? 5 : 4 // Listeners skip curation statement
+  }
+
+  const getDisplayStep = () => {
+    // Adjust displayed step number if listener (since they skip step 4)
+    if (!data.isCurator && step === 5) {
+      return 4
+    }
+    return step
   }
 
   return (
     <div className="min-h-screen bg-gray-900 py-12 px-4">
       <div className="max-w-2xl mx-auto">
-        {/* Progress */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-400">Step {step} of 4</span>
-            <span className="text-sm text-gray-400">{Math.round((step / 4) * 100)}%</span>
-          </div>
-          <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-purple-600 to-pink-600 transition-all duration-300"
-              style={{ width: `${(step / 4) * 100}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Step 1: Username */}
-        {step === 1 && (
-          <div className="space-y-6 bg-gray-800 p-8 rounded-lg">
-            <div>
-              <h2 className="text-3xl font-bold mb-2 text-white">Choose Your Identity</h2>
-              <p className="text-gray-400">This is how others will recognize you on DeepCuts.</p>
-            </div>
-
-            <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-2">
-                Username <span className="text-red-400">*</span>
-              </label>
-              <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value.replace(/[^a-z0-9_]/g, ''))}
-                pattern="[a-z0-9_]+"
-                required
-                maxLength={50}
-                className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                placeholder="music_lover_23"
-              />
-              <p className="text-xs text-gray-500 mt-1">Lowercase letters, numbers, and underscores only</p>
-            </div>
-
-            <div>
-              <label htmlFor="display-name" className="block text-sm font-medium text-gray-300 mb-2">
-                Display Name <span className="text-gray-500">(optional)</span>
-              </label>
-              <input
-                id="display-name"
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                maxLength={100}
-                className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                placeholder="Your Name"
-              />
-              <p className="text-xs text-gray-500 mt-1">A friendly name that appears alongside your username</p>
-            </div>
-
-            <button
-              onClick={() => setStep(2)}
-              disabled={!username || username.length < 3}
-              className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 text-white font-semibold rounded-lg transition-all disabled:cursor-not-allowed"
-            >
-              Continue
-            </button>
-          </div>
-        )}
-
-        {/* Step 2: Bio */}
-        {step === 2 && (
-          <div className="space-y-6 bg-gray-800 p-8 rounded-lg">
-            <div>
-              <h2 className="text-3xl font-bold mb-2 text-white">Tell Your Story</h2>
-              <p className="text-gray-400">Share what makes your musical taste unique.</p>
-            </div>
-
-            <div>
-              <label htmlFor="bio" className="block text-sm font-medium text-gray-300 mb-2">
-                Bio <span className="text-gray-500">(optional)</span>
-                <span className="text-gray-500 ml-2">({bio.length}/500)</span>
-              </label>
-              <textarea
-                id="bio"
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                rows={5}
-                maxLength={500}
-                className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                placeholder="I've been obsessed with music since I heard my first vinyl record at age 6. I dig deep for hidden gems in indie rock and dream pop..."
-              />
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setStep(1)}
-                className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors"
-              >
-                Back
-              </button>
-              <button
-                onClick={() => setStep(3)}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-lg transition-all"
-              >
-                Continue
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Genre Preferences */}
-        {step === 3 && (
-          <div className="space-y-6 bg-gray-800 p-8 rounded-lg">
-            <div>
-              <h2 className="text-3xl font-bold mb-2 text-white">Pick Your Genres</h2>
-              <p className="text-gray-400">
-                Select up to 5 genres you're passionate about. This helps others discover your taste.
-              </p>
-              <p className="text-sm text-purple-400 mt-2">
-                Selected: {selectedGenres.length}/5
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {GENRE_OPTIONS.map((genre) => {
-                const isSelected = selectedGenres.includes(genre)
-                const isDisabled = selectedGenres.length >= 5 && !isSelected
+        {/* Progress indicator */}
+        {step < 5 && (
+          <div className="mb-8">
+            <div className="flex justify-between items-center mb-2">
+              {Array.from({ length: getTotalSteps() }).map((_, i) => {
+                const stepNum = i + 1
+                const displayStep = getDisplayStep()
 
                 return (
-                  <button
-                    key={genre}
-                    onClick={() => handleGenreToggle(genre)}
-                    disabled={isDisabled}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all ${
-                      isSelected
-                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white'
-                        : isDisabled
-                        ? 'bg-gray-900 text-gray-600 cursor-not-allowed'
-                        : 'bg-gray-900 text-gray-300 hover:bg-gray-850 border border-gray-700'
+                  <div
+                    key={stepNum}
+                    className={`w-12 h-12 rounded-full flex items-center justify-center font-semibold ${
+                      stepNum === displayStep
+                        ? 'bg-purple-600 text-white'
+                        : stepNum < displayStep
+                        ? 'bg-purple-900 text-purple-300'
+                        : 'bg-gray-800 text-gray-500'
                     }`}
                   >
-                    {genre}
-                  </button>
+                    {stepNum}
+                  </div>
                 )
               })}
             </div>
-
-            {error && (
-              <div className="bg-red-900/20 border border-red-500 rounded-lg p-4 text-red-400 text-sm">
-                {error}
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setStep(2)}
-                disabled={loading}
-                className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors"
-              >
-                Back
-              </button>
-              <button
-                onClick={() => setStep(4)}
-                disabled={loading || selectedGenres.length === 0}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 text-white font-semibold rounded-lg transition-all disabled:cursor-not-allowed"
-              >
-                Continue
-              </button>
+            <div className="text-center text-sm text-gray-400">
+              Step {getDisplayStep()} of {getTotalSteps()}
             </div>
           </div>
         )}
 
-        {/* Step 4: Curation Statement */}
-        {step === 4 && (
-          <div className="space-y-6 bg-gray-800 p-8 rounded-lg">
-            <div>
-              <h2 className="text-3xl font-bold mb-2 text-white">How Do You Curate?</h2>
-              <p className="text-gray-400">
-                Help others understand your approach to music discovery.
-              </p>
-            </div>
+        {/* Error display */}
+        {error && (
+          <div className="bg-red-900/20 border border-red-500 rounded-lg p-4 text-red-400 text-sm mb-6">
+            {error}
+          </div>
+        )}
 
-            <div>
-              <label htmlFor="curation-statement" className="block text-sm font-medium text-gray-300 mb-2">
-                Curation Statement <span className="text-gray-500">(optional but recommended)</span>
-                <span className="text-gray-500 ml-2">({curationStatement.length}/500)</span>
-              </label>
-              <textarea
-                id="curation-statement"
-                value={curationStatement}
-                onChange={(e) => setCurationStatement(e.target.value)}
-                rows={6}
-                maxLength={500}
-                className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                placeholder="Examples:&#10;• I dig for rare soul and funk 45s from regional labels&#10;• I focus on contemporary classical music that pushes boundaries&#10;• I curate indie folk with literary lyrics and unusual instrumentation&#10;• I share 90s hip hop deep cuts and forgotten producers"
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                What makes your taste unique? What do you look for in music? This helps people decide if they should follow you.
-              </p>
-            </div>
-
-            {error && (
-              <div className="bg-red-900/20 border border-red-500 rounded-lg p-4 text-red-400 text-sm">
-                {error}
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setStep(3)}
-                disabled={loading}
-                className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors"
-              >
-                Back
-              </button>
-              <button
-                onClick={handleComplete}
-                disabled={loading}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 text-white font-semibold rounded-lg transition-all disabled:cursor-not-allowed"
-              >
-                {loading ? 'Creating Profile...' : 'Complete Setup'}
-              </button>
+        {/* Loading state when saving */}
+        {savingProfile && (
+          <div className="bg-gray-800 rounded-lg p-8">
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mb-4"></div>
+              <p className="text-gray-400">Creating your profile...</p>
             </div>
           </div>
+        )}
+
+        {/* Step content */}
+        {!savingProfile && (
+          <>
+            {step === 1 && (
+              <Step1Identity
+                data={data}
+                updateData={updateData}
+                onNext={nextStep}
+              />
+            )}
+
+            {step === 2 && (
+              <Step2TasteDevelopment
+                data={data}
+                updateData={updateData}
+                onNext={nextStep}
+                onBack={prevStep}
+              />
+            )}
+
+            {step === 3 && (
+              <Step3CuratorChoice
+                data={data}
+                updateData={updateData}
+                onNext={() => handleStepTransition(3)}
+                onBack={prevStep}
+              />
+            )}
+
+            {step === 4 && data.isCurator && (
+              <Step4CurationStatement
+                data={data}
+                updateData={updateData}
+                onNext={() => handleStepTransition(4)}
+                onBack={prevStep}
+              />
+            )}
+
+            {step === 5 && userId && (
+              <Step5RecommendedCurators
+                data={data}
+                userId={userId}
+              />
+            )}
+          </>
         )}
       </div>
     </div>
