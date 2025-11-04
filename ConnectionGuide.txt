@@ -1,0 +1,434 @@
+================================================================================
+DEEPCUTS - CONNECTION GUIDE
+================================================================================
+Last Updated: 2025-11-03
+Purpose: Central documentation of all ports, API endpoints, and connections
+         Prevents duplicate port usage and silent failures
+
+================================================================================
+ENVIRONMENT VARIABLES
+================================================================================
+
+Required for Local Development:
+--------------------------------
+SPOTIFY_CLIENT_ID=<your-client-id>
+SPOTIFY_CLIENT_SECRET=<your-client-secret>
+NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<from-supabase-start>
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+Required for Production:
+------------------------
+SPOTIFY_CLIENT_ID=<your-client-id>
+SPOTIFY_CLIENT_SECRET=<your-client-secret>
+NEXT_PUBLIC_SUPABASE_URL=<your-supabase-project-url>
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-supabase-anon-key>
+NEXT_PUBLIC_APP_URL=<your-production-url>
+
+================================================================================
+LOCAL DEVELOPMENT PORTS
+================================================================================
+
+Next.js Development Server:
+---------------------------
+Port: 3000
+URL: http://localhost:3000
+Started by: npm run dev
+Used for: Frontend application
+
+Supabase Services (when running `supabase start`):
+-------------------------------------------------
+PostgreSQL Database:
+  Port: 54322
+  Connection: postgresql://postgres:postgres@localhost:54322/postgres
+
+Supabase Studio (Database Admin UI):
+  Port: 54323
+  URL: http://localhost:54323
+  Used for: Database management, viewing tables, running queries
+
+Supabase API:
+  Port: 54321
+  URL: http://localhost:54321
+  Used for: Database queries, auth, storage (client SDK connects here)
+
+Supabase Auth:
+  Port: 54324
+  Internal: Used by Supabase services
+
+Supabase Storage:
+  Port: 54325
+  Internal: Used for file storage (future: user avatars)
+
+Supabase Inbucket (Email Testing):
+  Port: 54326
+  URL: http://localhost:54326
+  Used for: Viewing email verification emails during local dev
+
+Supabase Realtime:
+  Port: 54327
+  Internal: WebSocket server (future: real-time updates)
+
+IMPORTANT: If you see "port already in use" errors:
+- Run `supabase stop` then `supabase start`
+- Check for orphaned processes: `lsof -i :PORT_NUMBER` (Mac/Linux)
+- Check for orphaned processes: `netstat -ano | findstr :PORT_NUMBER` (Windows)
+
+================================================================================
+API ENDPOINTS (Next.js API Routes)
+================================================================================
+
+Authentication:
+--------------
+POST   /api/auth/signup           - Create new account
+POST   /api/auth/signin           - Sign in with email/password
+POST   /api/auth/signout          - Sign out current user
+GET    /auth/callback             - OAuth callback (Supabase email verification)
+
+Drops:
+------
+POST   /api/drops/create          - Create new drop (enforces 10/week limit)
+                                   Body: { track_id, track_name, artist_name,
+                                          album_name, album_art_url, platform,
+                                          context, listening_notes, genres, moods,
+                                          external_url, preview_url }
+                                   Returns: { drop, drops_this_week, limit }
+
+POST   /api/drops/[id]/save       - Save drop to private collection
+                                   Returns: { success: true }
+
+DELETE /api/drops/[id]/save       - Unsave drop
+                                   Returns: { success: true }
+
+POST   /api/drops/[id]/click      - Track platform click (for attribution)
+                                   Body: { platform }
+                                   Returns: { success: true }
+
+Following:
+---------
+POST   /api/users/[username]/follow   - Follow a curator
+                                       Returns: { success: true }
+                                       Error: { error: 'Cannot follow yourself' }
+
+DELETE /api/users/[username]/follow   - Unfollow a curator
+                                       Returns: { success: true }
+
+Search:
+-------
+GET    /api/search/tracks         - Search Spotify for tracks
+                                   Query: ?q=<search-term>
+                                   Returns: { tracks: [...] }
+
+================================================================================
+DATABASE FUNCTIONS (Supabase RPC)
+================================================================================
+
+Weekly Drop Limit:
+-----------------
+Function: get_weekly_drop_count(user_uuid UUID)
+Returns: INTEGER (number of drops posted this week)
+Usage: await supabase.rpc('get_weekly_drop_count', { user_uuid: user.id })
+Note: Week starts Monday 00:00 UTC
+
+Function: get_next_week_reset()
+Returns: TIMESTAMP WITH TIME ZONE (next Monday 00:00 UTC)
+Usage: await supabase.rpc('get_next_week_reset')
+
+Activity Level Calculation:
+---------------------------
+Function: calculate_activity_level(drop_count INTEGER)
+Returns: TEXT ('exploring' | 'occasional' | 'active' | 'prolific')
+Logic:
+  < 5 drops = 'exploring'
+  5-19 drops = 'occasional'
+  20-49 drops = 'active'
+  50+ drops = 'prolific'
+
+================================================================================
+EXTERNAL APIs
+================================================================================
+
+Spotify Web API:
+---------------
+Base URL: https://api.spotify.com/v1
+Auth Endpoint: https://accounts.spotify.com/api/token
+Auth Type: Client Credentials (no user OAuth)
+
+Endpoints Used:
+- POST /api/token (get access token)
+- GET /v1/search?q=<query>&type=track&limit=10 (search tracks)
+
+Rate Limits:
+- Token expires after 1 hour (cache and refresh)
+- Search API: No official limit, but keep under 10 req/sec
+
+Token Caching Strategy:
+- Cache token for 55 minutes (5 min buffer before 1hr expiration)
+- Implemented in: lib/spotify/client.ts
+
+================================================================================
+DATABASE SCHEMA (Key Tables)
+================================================================================
+
+profiles:
+--------
+Primary Key: id (UUID, references auth.users)
+Unique: username
+Indexes:
+  - idx_profiles_username (username)
+  - idx_profiles_genre_prefs (genre_preferences) - GIN index for array search
+
+drops:
+-----
+Primary Key: id (UUID)
+Foreign Key: user_id (references profiles.id)
+Indexes:
+  - idx_drops_user_id (user_id)
+  - idx_drops_created_at (created_at DESC) - for chronological feed
+  - idx_drops_genres (genres) - GIN index for array search
+
+follows:
+-------
+Composite Primary Key: (follower_id, following_id)
+Indexes:
+  - idx_follows_follower (follower_id) - for "who am I following?"
+  - idx_follows_following (following_id) - for "who follows me?"
+
+drop_saves:
+----------
+Composite Primary Key: (user_id, drop_id)
+Indexes:
+  - idx_drop_saves_user (user_id) - for "my saved drops"
+  - idx_drop_saves_drop (drop_id) - for "who saved this drop?"
+  - idx_drop_saves_created (created_at DESC) - for "recently saved" sorting
+
+user_genre_stats:
+----------------
+Composite Primary Key: (user_id, genre)
+Indexes:
+  - idx_genre_stats_user (user_id)
+  - idx_genre_stats_genre (genre)
+
+platform_clicks:
+---------------
+Primary Key: id (UUID)
+Foreign Keys:
+  - drop_id (references drops.id)
+  - user_id (references profiles.id, nullable for anonymous clicks)
+Indexes:
+  - idx_platform_clicks_drop (drop_id)
+  - idx_platform_clicks_date (clicked_at)
+
+================================================================================
+ROW-LEVEL SECURITY (RLS) POLICIES
+================================================================================
+
+profiles:
+--------
+- SELECT: Anyone can view all profiles
+- INSERT: Users can only create their own profile (auth.uid() = id)
+- UPDATE: Users can only update their own profile (auth.uid() = id)
+
+drops:
+-----
+- SELECT: Anyone can view all drops
+- INSERT: Users can only create their own drops (auth.uid() = user_id)
+- UPDATE: Users can only update their own drops (auth.uid() = user_id)
+- DELETE: Users can only delete their own drops (auth.uid() = user_id)
+
+follows:
+-------
+- SELECT: Anyone can view all follows (public following relationships)
+- INSERT: Users can only create follows where they are the follower (auth.uid() = follower_id)
+- DELETE: Users can only delete follows where they are the follower (auth.uid() = follower_id)
+
+drop_saves:
+----------
+- SELECT: Users can ONLY view their own saves (auth.uid() = user_id) - PRIVATE
+- INSERT: Users can only create their own saves (auth.uid() = user_id)
+- DELETE: Users can only delete their own saves (auth.uid() = user_id)
+
+user_genre_stats:
+----------------
+- SELECT: Anyone can view all genre stats
+
+platform_clicks:
+---------------
+- INSERT: Anyone can insert clicks (public write for anonymous tracking)
+
+CRITICAL: RLS policies enforce data privacy at database level
+Cannot be bypassed via API routes or client-side code
+
+================================================================================
+ROUTING & NAVIGATION
+================================================================================
+
+Public Routes (no auth required):
+---------------------------------
+/                           - Landing page
+/auth/signin               - Sign in page
+/auth/signup               - Sign up page
+/feed                      - Browse drops (public view)
+/profile/[username]        - View any user's profile
+
+Protected Routes (auth required):
+---------------------------------
+/onboarding                - Complete profile setup (redirects if already onboarded)
+/drop/create               - Create new drop
+/saved                     - View saved drops (private)
+/discover                  - Discover curators
+
+API Routes (all require auth except where noted):
+------------------------------------------------
+All /api/* routes check authentication via supabase.auth.getUser()
+Returns 401 if not authenticated
+
+================================================================================
+TRIGGERS & AUTOMATION
+================================================================================
+
+Auto-Update Follower Counts:
+---------------------------
+Trigger: follow_count_trigger
+Fires: AFTER INSERT OR DELETE on follows
+Function: update_follow_counts()
+Action:
+  - INSERT: Increment follower_count on following_id, increment following_count on follower_id
+  - DELETE: Decrement follower_count on following_id, decrement following_count on follower_id
+
+Auto-Update Save Counts:
+-----------------------
+Trigger: save_count_trigger
+Fires: AFTER INSERT OR DELETE on drop_saves
+Function: update_save_count()
+Action:
+  - INSERT: Increment save_count on drop_id
+  - DELETE: Decrement save_count on drop_id
+
+IMPORTANT: Save counts are stored but NEVER displayed publicly
+
+================================================================================
+CACHING STRATEGY
+================================================================================
+
+Current (MVP):
+-------------
+- No caching layer
+- Rely on Supabase connection pooling
+- Vercel Edge caching for static pages
+
+Planned (Phase 2):
+-----------------
+- Redis for feed caching (5 minute TTL)
+- Cached user profiles (5 minute TTL)
+- Cached genre stats (1 hour TTL)
+- Cache invalidation on new drop/follow/save
+
+================================================================================
+COMMON ISSUES & DEBUGGING
+================================================================================
+
+Issue: "Port 3000 already in use"
+Solution:
+  - Kill process using port 3000
+  - Windows: netstat -ano | findstr :3000, then taskkill /PID <PID> /F
+  - Mac/Linux: lsof -i :3000, then kill -9 <PID>
+
+Issue: "Database connection failed"
+Solution:
+  - Ensure Supabase is running: supabase status
+  - Check NEXT_PUBLIC_SUPABASE_URL matches output of supabase status
+  - Verify NEXT_PUBLIC_SUPABASE_ANON_KEY is correct
+
+Issue: "Spotify search not working"
+Solution:
+  - Check SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET are set
+  - Test token generation: lib/spotify/client.ts
+  - Check Spotify API status: https://developer.spotify.com/status
+
+Issue: "RLS policy blocking query"
+Solution:
+  - Check if user is authenticated: await supabase.auth.getUser()
+  - Verify RLS policy matches query (e.g., trying to view others' saves)
+  - Test query in Supabase Studio with user context
+
+Issue: "Weekly limit not resetting"
+Solution:
+  - Verify get_weekly_drop_count() function logic
+  - Check timezone: Should be Monday 00:00 UTC
+  - Test: SELECT date_trunc('week', NOW());
+
+================================================================================
+DEPLOYMENT
+================================================================================
+
+Production Ports:
+----------------
+Vercel handles port management automatically
+Supabase cloud handles database ports automatically
+
+Production URLs:
+---------------
+Frontend: <your-vercel-domain>
+Supabase: <your-project-ref>.supabase.co
+Database: db.<your-project-ref>.supabase.co:5432
+
+Production Environment Variables (Vercel):
+-----------------------------------------
+Set via Vercel Dashboard or `vercel env add`
+- SPOTIFY_CLIENT_ID
+- SPOTIFY_CLIENT_SECRET
+- NEXT_PUBLIC_SUPABASE_URL
+- NEXT_PUBLIC_SUPABASE_ANON_KEY
+- NEXT_PUBLIC_APP_URL
+
+Database Migration to Production:
+--------------------------------
+1. Link local to production: supabase link --project-ref <your-ref>
+2. Push migrations: supabase db push
+3. Verify in Supabase Dashboard
+
+================================================================================
+MONITORING & LOGGING
+================================================================================
+
+Local Development:
+-----------------
+- Next.js logs: Terminal running `npm run dev`
+- Supabase logs: `supabase logs --table <table-name>`
+- Database queries: Supabase Studio → Logs tab
+
+Production:
+----------
+- Vercel logs: Vercel Dashboard → Functions → View logs
+- Supabase logs: Supabase Dashboard → Logs & Metrics
+- Error tracking: (Future: Sentry)
+
+================================================================================
+TESTING ENDPOINTS
+================================================================================
+
+To test locally, use these curl commands:
+
+Test Spotify Search:
+-------------------
+curl http://localhost:3000/api/search/tracks?q=arctic%20monkeys
+
+Test Drop Creation:
+------------------
+curl -X POST http://localhost:3000/api/drops/create \
+  -H "Content-Type: application/json" \
+  -d '{
+    "track_id": "spotify:track:5FVd6KXrgO9B3JPmC8OPst",
+    "track_name": "Do I Wanna Know?",
+    "artist_name": "Arctic Monkeys",
+    "platform": "spotify",
+    "context": "This track perfectly captures the feeling of..."
+  }'
+
+Note: Auth token required for protected endpoints
+Get token from browser DevTools → Application → Cookies → sb-<project-ref>-auth-token
+
+================================================================================
+END OF CONNECTION GUIDE
+================================================================================

@@ -48,8 +48,7 @@ export default async function DiscoverPage({
       follower_count,
       following_count,
       total_drops,
-      genre_preferences,
-      top_genres
+      genre_preferences
     `)
     .gt('total_drops', 0) // Only show curators with at least 1 drop
 
@@ -65,8 +64,22 @@ export default async function DiscoverPage({
 
   const { data: allCurators } = await query.limit(50)
 
+  // Fetch top_genres for each curator using RPC function
+  const curatorsWithGenres = await Promise.all(
+    (allCurators || []).map(async (curator) => {
+      const { data: topGenres } = await supabase.rpc('get_user_top_genres', {
+        user_uuid: curator.id
+      })
+
+      return {
+        ...curator,
+        top_genres: topGenres || []
+      }
+    })
+  )
+
   // Filter by genre if selected (client-side since we need to check arrays)
-  let curators = allCurators || []
+  let curators = curatorsWithGenres
   if (selectedGenre) {
     curators = curators.filter(
       (c) =>
