@@ -2,6 +2,35 @@
 
 > Discover music through trusted tastemakers, not algorithms.
 
+**📌 Current Status:** MVP Complete + Architecture Improvements (Nov 2025)
+**🚀 Branch:** `claude/project-review-011CUYCggo6PyaMHfkxeLBCH`
+**📖 [Testing Instructions](./TESTING_INSTRUCTIONS.md)** | **📐 [Architecture Docs](./ARCHITECTURE.md)** | **🗺️ [Vision](./vision.md)**
+
+---
+
+## 🆕 Recent Updates (November 3, 2025)
+
+### ✅ Completed Architecture Improvements
+
+**STEP 1: Fixed Data Model**
+- Auto-populating genre stats trigger
+- Taste areas now display on profiles
+- Top genres computed from activity
+
+**STEP 2: Database-Level Genre Filtering**
+- Moved filtering from client to database
+- Performance indexes for fast queries
+- Scales to thousands of curators
+
+**STEP 3: Instagram-Style Infinite Scroll**
+- Cursor-based pagination API
+- Smooth infinite scrolling feed
+- Optimized initial page load
+
+➡️ **[Read Testing Instructions](./TESTING_INSTRUCTIONS.md)** for how to test these features.
+
+---
+
 ## What is DeepCuts?
 
 DeepCuts is a music discovery platform where **taste matters**. Find curators whose music recommendations align with your own taste. Follow the tastemakers you trust, save the drops you love, and build your own music discovery network.
@@ -136,7 +165,64 @@ Open http://localhost:3000
 
 ---
 
-## Features
+## 📋 Current Features (MVP + Improvements)
+
+### ✅ Implemented & Working
+
+**Core Platform:**
+- User authentication (email/password via Supabase)
+- 4-step onboarding flow
+- Weekly drop limit enforcement (10 drops/week)
+- Platform-agnostic track metadata (Spotify, Apple Music, YouTube, SoundCloud)
+
+**Feed & Discovery:**
+- ✨ **NEW:** Infinite scroll feed with cursor-based pagination
+- ✨ **NEW:** Database-level genre filtering
+- Following tab (drops from curators you follow)
+- Discover tab (all drops across platform)
+- Genre-based curator discovery
+
+**Profile & Curation:**
+- ✨ **NEW:** Auto-populating taste areas (genre activity)
+- ✨ **NEW:** Top 5 genres computed from drops
+- Public profile pages with curation statements
+- Activity levels: Exploring → Occasional → Active → Prolific
+- Drop creation with context (50-2000 chars required)
+
+**Social Features:**
+- Asymmetric following (Twitter-style)
+- Private save functionality
+- Following/follower counts
+
+### 🚧 Planned (Step 4 - Next Session)
+
+**Enhanced Onboarding:**
+- Taste development questionnaire
+- Genre experience levels (discovering/regular/deep diver)
+- Discovery preferences (new releases, deep cuts, classics, etc.)
+- Curator vs. Listener choice
+
+**Recommendation System:**
+- Algorithm-driven curator suggestions
+- Taste compatibility matching
+- Personalized "Recommended for you" curators
+
+**See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for full roadmap.**
+
+---
+
+## 📚 Documentation
+
+**Essential Reading:**
+- **[TESTING_INSTRUCTIONS.md](./TESTING_INSTRUCTIONS.md)** - How to test new features
+- **[vision.md](./vision.md)** - Complete product vision and user flows
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Technical architecture details
+- **[ConnectionGuide.txt](./ConnectionGuide.txt)** - Ports, endpoints, and debugging
+- **[IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md)** - 4-step improvement plan
+
+---
+
+## Features (Detailed)
 
 ### For Curators
 
