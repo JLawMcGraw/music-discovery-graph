@@ -35,57 +35,16 @@ export default async function DiscoverPage({
     ? Array.from(new Set(allGenres.map((g) => g.genre))).sort()
     : []
 
-  // Build curator query
-  let query = supabase
-    .from('profiles')
-    .select(`
-      id,
-      username,
-      display_name,
-      bio,
-      curation_statement,
-      avatar_url,
-      follower_count,
-      following_count,
-      total_drops,
-      genre_preferences
-    `)
-    .gt('total_drops', 0) // Only show curators with at least 1 drop
-
-  // Apply ordering
-  if (sortBy === 'active') {
-    query = query.order('total_drops', { ascending: false })
-  } else if (sortBy === 'new') {
-    query = query.order('created_at', { ascending: false })
-  } else {
-    // default: followers
-    query = query.order('follower_count', { ascending: false })
-  }
-
-  const { data: allCurators } = await query.limit(50)
-
-  // Fetch top_genres for each curator using RPC function
-  const curatorsWithGenres = await Promise.all(
-    (allCurators || []).map(async (curator) => {
-      const { data: topGenres } = await supabase.rpc('get_user_top_genres', {
-        user_uuid: curator.id
-      })
-
-      return {
-        ...curator,
-        top_genres: topGenres || []
-      }
+  // Use database-level search with genre filtering
+  const { data: curators, error: curatorsError } = await supabase
+    .rpc('search_curators_by_genre', {
+      search_genre: selectedGenre || null,
+      sort_by: sortBy,
+      limit_count: 50
     })
-  )
 
-  // Filter by genre if selected (client-side since we need to check arrays)
-  let curators = curatorsWithGenres
-  if (selectedGenre) {
-    curators = curators.filter(
-      (c) =>
-        c.genre_preferences?.includes(selectedGenre) ||
-        c.top_genres?.includes(selectedGenre)
-    )
+  if (curatorsError) {
+    console.error('Failed to fetch curators:', curatorsError)
   }
 
   // Get following list for current user

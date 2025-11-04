@@ -314,6 +314,27 @@ export type Database = {
         }
         Returns: number
       }
+      search_curators_by_genre: {
+        Args: {
+          search_genre?: string
+          sort_by?: string
+          limit_count?: number
+        }
+        Returns: {
+          id: string
+          username: string
+          display_name: string
+          bio: string
+          curation_statement: string
+          avatar_url: string
+          follower_count: number
+          following_count: number
+          total_drops: number
+          genre_preferences: string[]
+          top_genres: string[]
+          created_at: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
