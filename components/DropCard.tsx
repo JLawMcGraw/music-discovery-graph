@@ -14,75 +14,61 @@ interface Drop {
   preview_url: string | null
   context: string
   listening_notes: string | null
-  reputation_stake: number
   genres: string[] | null
   mood_tags: string[] | null
-  validation_score: number
-  validation_count: number
-  status: string
   created_at: string
   user_id: string
   profiles: {
     username: string
     avatar_url: string | null
-    trust_score: number
+    follower_count: number
   }
-  drop_validations?: Array<{
-    rating: number
-    validator_id: string
-  }>
+  is_saved?: boolean
 }
 
 interface DropCardProps {
   drop: Drop
   currentUserId?: string
-  onValidate?: (dropId: string, rating: number) => void
+  onSave?: (dropId: string) => void
+  onUnsave?: (dropId: string) => void
 }
 
-export function DropCard({ drop, currentUserId, onValidate }: DropCardProps) {
-  const [rating, setRating] = useState<number | null>(null)
-  const [showValidation, setShowValidation] = useState(false)
-  const [validating, setValidating] = useState(false)
+export function DropCard({ drop, currentUserId, onSave, onUnsave }: DropCardProps) {
+  const [isSaved, setIsSaved] = useState(drop.is_saved || false)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const userHasValidated = drop.drop_validations?.some(
-    (v) => v.validator_id === currentUserId
-  )
   const isOwnDrop = drop.user_id === currentUserId
 
-  const handleValidate = async () => {
-    if (!rating || !currentUserId) return
+  const handleSaveToggle = async () => {
+    if (!currentUserId || saving) return
 
-    setValidating(true)
+    setSaving(true)
     setError(null)
 
     try {
-      const response = await fetch(`/api/drops/${drop.id}/validate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          rating,
-          listened: true,
-        }),
+      const method = isSaved ? 'DELETE' : 'POST'
+      const response = await fetch(`/api/drops/${drop.id}/save`, {
+        method,
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to validate drop')
+        throw new Error(data.error || 'Failed to save drop')
       }
 
-      if (onValidate) {
-        onValidate(drop.id, rating)
-      }
+      setIsSaved(!isSaved)
 
-      setShowValidation(false)
+      if (!isSaved && onSave) {
+        onSave(drop.id)
+      } else if (isSaved && onUnsave) {
+        onUnsave(drop.id)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
-      setValidating(false)
+      setSaving(false)
     }
   }
 
@@ -139,15 +125,10 @@ export function DropCard({ drop, currentUserId, onValidate }: DropCardProps) {
           <div>
             <div className="font-medium text-white">{drop.profiles.username}</div>
             <div className="text-sm text-gray-400">
-              Trust: {drop.profiles.trust_score} • {formatTimeAgo(drop.created_at)}
+              {drop.profiles.follower_count} followers • {formatTimeAgo(drop.created_at)}
             </div>
           </div>
         </Link>
-        <div className="flex items-center gap-2">
-          <span className="px-3 py-1 bg-purple-900/30 border border-purple-500 rounded-full text-sm text-purple-300">
-            {drop.reputation_stake} pts staked
-          </span>
-        </div>
       </div>
 
       {/* Track Info */}
@@ -215,87 +196,45 @@ export function DropCard({ drop, currentUserId, onValidate }: DropCardProps) {
         </div>
       )}
 
-      {/* Validation Stats */}
+      {/* Actions */}
       <div className="flex items-center justify-between pt-4 border-t border-gray-700">
-        <div className="flex items-center gap-4 text-sm text-gray-400">
-          <span>{drop.validation_count} validations</span>
-          {drop.validation_count > 0 && (
-            <span className="flex items-center gap-1">
-              <span className="text-yellow-400">★</span>
-              {(drop.validation_score * 5).toFixed(1)}/5.0
-            </span>
-          )}
+        <div className="text-sm text-gray-400">
+          {isOwnDrop && <span>Your drop</span>}
         </div>
 
-        {/* Validation Button */}
-        {currentUserId && !isOwnDrop && !userHasValidated && drop.status === 'active' && (
+        {/* Save Button */}
+        {currentUserId && !isOwnDrop && (
           <button
-            onClick={() => setShowValidation(!showValidation)}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors"
+            onClick={handleSaveToggle}
+            disabled={saving}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              isSaved
+                ? 'bg-purple-600 text-white hover:bg-purple-700'
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
-            Validate
+            {saving ? (
+              <>Saving...</>
+            ) : isSaved ? (
+              <>
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
+                </svg>
+                Saved
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                </svg>
+                Save
+              </>
+            )}
           </button>
-        )}
-
-        {userHasValidated && (
-          <span className="text-sm text-green-400">✓ You validated this</span>
-        )}
-
-        {isOwnDrop && (
-          <span className="text-sm text-gray-500">Your drop</span>
         )}
       </div>
 
-      {/* Validation UI */}
-      {showValidation && (
-        <div className="bg-gray-900 rounded-lg p-4 space-y-4">
-          <h4 className="text-white font-medium">Rate this recommendation:</h4>
-
-          <div className="flex gap-2">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <button
-                key={star}
-                onClick={() => setRating(star)}
-                className={`text-3xl transition-all ${
-                  rating && star <= rating ? 'text-yellow-400' : 'text-gray-600 hover:text-gray-400'
-                }`}
-              >
-                ★
-              </button>
-            ))}
-          </div>
-
-          <div className="text-sm text-gray-400">
-            {rating === 5 && '🔥 Amazing recommendation!'}
-            {rating === 4 && '👍 Great find'}
-            {rating === 3 && '👌 Decent recommendation'}
-            {rating === 2 && '😐 Not my thing'}
-            {rating === 1 && '👎 Poor recommendation'}
-          </div>
-
-          {error && <div className="text-sm text-red-400">{error}</div>}
-
-          <div className="flex gap-2">
-            <button
-              onClick={handleValidate}
-              disabled={!rating || validating}
-              className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 text-white font-medium rounded-lg transition-colors disabled:cursor-not-allowed"
-            >
-              {validating ? 'Submitting...' : 'Submit Rating'}
-            </button>
-            <button
-              onClick={() => {
-                setShowValidation(false)
-                setRating(null)
-                setError(null)
-              }}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      {error && <div className="text-sm text-red-400 mt-2">{error}</div>}
     </div>
   )
 }

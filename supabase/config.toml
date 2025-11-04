@@ -45,7 +45,12 @@ double_confirm_changes = true
 enable_confirmations = false
 
 [auth.external.spotify]
-enabled = true
-client_id = "env(SPOTIFY_CLIENT_ID)"
-secret = "env(SPOTIFY_CLIENT_SECRET)"
-redirect_uri = "http://localhost:54321/auth/v1/callback"
+enabled = false
+# We use Spotify public API (Client Credentials) in the app, not OAuth
+# client_id = "env(SPOTIFY_CLIENT_ID)"
+# secret = "env(SPOTIFY_CLIENT_SECRET)"
+# redirect_uri = "http://localhost:54321/auth/v1/callback"
+
+[analytics]
+enabled = false
+# Disabled to avoid Docker socket connection issues on Windows

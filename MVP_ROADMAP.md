@@ -1,574 +1,409 @@
-# Signal MVP - Where to Start
+# DeepCuts MVP - Current Status & Roadmap
 
-## The Critical Question
+## ✅ Current Status: MVP Complete
 
-Before writing any code, we need to validate: **Will people actually stake reputation on music recommendations?**
-
-Everything else (circles, advanced matching, premium features) is pointless if this core mechanic doesn't work.
-
----
-
-## Week 1-2: Foundation + Spotify Integration
-
-### Why Start Here?
-Signal's authenticity depends on **real listening history**. Without it, it's just another link-sharing site. Spotify integration proves we can build the trust graph from actual data.
-
-### Tasks
-
-#### 1. Project Setup (Day 1)
-```bash
-# Initialize Next.js 14 with TypeScript
-npx create-next-app@latest signal-mvp --typescript --tailwind --app
-
-# Add Supabase
-npx supabase init
-npx supabase start
-
-# Core dependencies
-npm install @supabase/supabase-js @supabase/auth-helpers-nextjs
-npm install spotify-web-api-node
-npm install date-fns zod
-```
-
-**Deliverable**: Running Next.js app with Supabase connected
+**Version:** 1.0 - Pure Curation Model
+**Status:** Ready for user testing
+**Last Updated:** October 2024
 
 ---
 
-#### 2. Spotify OAuth Flow (Days 2-3)
+## What We Built (MVP Features Complete)
 
-**File: `app/api/auth/spotify/route.ts`**
-```typescript
-// Initiate Spotify authorization
-export async function GET() {
-  const scopes = [
-    'user-read-recently-played',
-    'user-top-read',
-    'user-read-email'
-  ];
+### Core System
 
-  const authUrl = `https://accounts.spotify.com/authorize?${new URLSearchParams({
-    client_id: process.env.SPOTIFY_CLIENT_ID!,
-    response_type: 'code',
-    redirect_uri: process.env.SPOTIFY_REDIRECT_URI!,
-    scope: scopes.join(' ')
-  })}`;
+✅ **User Authentication & Onboarding**
+- Email/password authentication via Supabase
+- 4-step onboarding flow:
+  1. Username and display name
+  2. Bio (optional)
+  3. Genre preferences (up to 5)
+  4. Curation statement (explains your approach)
 
-  return Response.redirect(authUrl);
-}
-```
+✅ **Drop Creation System**
+- Weekly limit: 10 drops per week (resets Monday 00:00 UTC)
+- Required context (50-2000 characters explaining why the track matters)
+- Optional listening notes (what to pay attention to)
+- Genre and mood tags
+- Spotify track search (public API, no OAuth)
+- Platform-agnostic (supports Spotify, Apple Music, YouTube, SoundCloud metadata)
 
-**File: `app/api/auth/spotify/callback/route.ts`**
-```typescript
-// Handle callback and store tokens
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const code = searchParams.get('code');
+✅ **Following System**
+- Asymmetric following (Twitter-style)
+- Follow/unfollow curators
+- Follower/following counts on profiles
+- "Following" feed shows drops from people you follow
+- "Discover" feed shows all drops
 
-  // Exchange code for access token
-  const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      code: code!,
-      redirect_uri: process.env.SPOTIFY_REDIRECT_URI!,
-      client_id: process.env.SPOTIFY_CLIENT_ID!,
-      client_secret: process.env.SPOTIFY_CLIENT_SECRET!
-    })
-  });
+✅ **Private Save Functionality**
+- Save drops you love (private collection)
+- View saved drops at `/saved`
+- No public save counts or metrics
+- Unsave anytime
 
-  const tokens = await tokenResponse.json();
+✅ **Curator Discovery**
+- `/discover` page to browse curators
+- Filter by genre
+- Sort by: followers, most active, newest
+- Read curation statements before following
+- One-click follow buttons
 
-  // Store in Supabase
-  const supabase = createRouteHandlerClient({ cookies });
-  await supabase.from('spotify_connections').insert({
-    user_id: (await supabase.auth.getUser()).data.user?.id,
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    expires_at: new Date(Date.now() + tokens.expires_in * 1000)
-  });
+✅ **User Profiles**
+- Public profile pages (`/profile/username`)
+- Curation statement prominently displayed
+- Taste areas showing genre activity:
+  - Exploring (< 5 drops)
+  - Occasional (5-19 drops)
+  - Active (20-49 drops)
+  - Prolific (50+ drops)
+- Stats: total drops, followers, following
+- All user's drops displayed
+- Follow button (if not your profile)
 
-  return Response.redirect('/dashboard');
-}
-```
-
-**Deliverable**: Users can connect Spotify and we store their tokens
-
----
-
-#### 3. Listening History Sync (Days 4-5)
-
-**Database Schema**:
-```sql
--- migrations/001_initial_schema.sql
-
--- Users table (Supabase Auth handles this)
-
--- Spotify connections
-CREATE TABLE spotify_connections (
-  user_id UUID PRIMARY KEY REFERENCES auth.users(id),
-  access_token TEXT NOT NULL,
-  refresh_token TEXT NOT NULL,
-  expires_at TIMESTAMP NOT NULL,
-  last_synced TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Listening history (partitioned by month)
-CREATE TABLE listening_history (
-  id BIGSERIAL PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id),
-  track_id VARCHAR(255) NOT NULL,
-  track_name VARCHAR(500),
-  artist_name VARCHAR(500),
-  played_at TIMESTAMP NOT NULL,
-  duration_ms INTEGER,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX idx_listening_user_date ON listening_history(user_id, played_at DESC);
-CREATE INDEX idx_listening_track ON listening_history(track_id);
-
--- Enable Row Level Security
-ALTER TABLE spotify_connections ENABLE ROW LEVEL SECURITY;
-ALTER TABLE listening_history ENABLE ROW LEVEL SECURITY;
-
--- Users can only see their own data
-CREATE POLICY "Users can view own spotify connection" ON spotify_connections
-  FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can view own listening history" ON listening_history
-  FOR SELECT USING (auth.uid() = user_id);
-```
-
-**File: `lib/spotify-sync.ts`**
-```typescript
-import SpotifyWebApi from 'spotify-web-api-node';
-
-export async function syncRecentlyPlayed(userId: string) {
-  const supabase = createClient();
-
-  // Get user's tokens
-  const { data: connection } = await supabase
-    .from('spotify_connections')
-    .select('*')
-    .eq('user_id', userId)
-    .single();
-
-  if (!connection) throw new Error('No Spotify connection');
-
-  // Initialize Spotify API
-  const spotify = new SpotifyWebApi({
-    clientId: process.env.SPOTIFY_CLIENT_ID,
-    clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
-    accessToken: connection.access_token
-  });
-
-  // Fetch recently played (last 50 tracks)
-  const recentTracks = await spotify.getMyRecentlyPlayedTracks({ limit: 50 });
-
-  // Insert into database
-  const historyRecords = recentTracks.body.items.map(item => ({
-    user_id: userId,
-    track_id: item.track.id,
-    track_name: item.track.name,
-    artist_name: item.track.artists[0].name,
-    played_at: item.played_at,
-    duration_ms: item.track.duration_ms
-  }));
-
-  await supabase.from('listening_history').upsert(historyRecords, {
-    onConflict: 'user_id,track_id,played_at',
-    ignoreDuplicates: true
-  });
-
-  // Update last_synced
-  await supabase
-    .from('spotify_connections')
-    .update({ last_synced: new Date() })
-    .eq('user_id', userId);
-
-  return historyRecords.length;
-}
-```
-
-**Deliverable**: Background job that syncs Spotify listening history every hour
+✅ **Database & Infrastructure**
+- PostgreSQL via Supabase
+- Row-Level Security policies
+- Background functions for weekly limits
+- Genre stats calculation
+- Optimized indexes
+- TypeScript types generated from schema
 
 ---
 
-## Week 3: The Core Mechanic - Drops with Reputation Stakes
+## Key Architecture Decisions
 
-### Why This Next?
-This is the innovation. If this doesn't resonate, nothing else matters.
+### What We Chose NOT to Build
 
-### Tasks
+❌ **Validation/Rating System**
+- Removed: 1-5 star ratings on drops
+- Removed: Reputation stakes (no points at risk)
+- Removed: Trust scores and competitive metrics
+- **Why:** Eliminates gamification and approval-seeking behavior
 
-#### 4. User Profiles & Reputation System (Days 6-7)
+❌ **Spotify OAuth / Listening History Sync**
+- No user authentication with Spotify
+- Uses public Spotify API (Client Credentials flow)
+- Platform-agnostic by design
+- **Why:** Simpler, cheaper ($50/mo vs $160/mo), no privacy concerns, works with any platform
 
-**Database Schema**:
-```sql
--- User profiles
-CREATE TABLE profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users(id),
-  username VARCHAR(50) UNIQUE NOT NULL,
-  display_name VARCHAR(100),
-  avatar_url TEXT,
-  trust_score INTEGER DEFAULT 100,
-  reputation_available INTEGER DEFAULT 100, -- Points they can stake
-  total_drops INTEGER DEFAULT 0,
-  created_at TIMESTAMP DEFAULT NOW()
-);
+❌ **Drop Expiration**
+- Drops never expire
+- Permanent statements of taste
+- **Why:** Drops represent your curation philosophy, not time-limited recommendations
 
--- Reputation ledger (immutable event log)
-CREATE TABLE reputation_events (
-  id BIGSERIAL PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id),
-  event_type VARCHAR(50) NOT NULL, -- 'drop_created', 'drop_validated', 'drop_failed'
-  points_change INTEGER NOT NULL, -- Positive or negative
-  related_drop_id UUID, -- References drops table
-  metadata JSONB,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX idx_reputation_user ON reputation_events(user_id, created_at DESC);
-
--- Function to update trust score
-CREATE OR REPLACE FUNCTION update_trust_score()
-RETURNS TRIGGER AS $$
-BEGIN
-  UPDATE profiles
-  SET
-    trust_score = trust_score + NEW.points_change,
-    reputation_available = CASE
-      WHEN NEW.event_type = 'drop_created' THEN reputation_available - (NEW.metadata->>'stake')::INTEGER
-      WHEN NEW.event_type = 'drop_validated' THEN reputation_available + (NEW.metadata->>'stake')::INTEGER
-      ELSE reputation_available
-    END
-  WHERE id = NEW.user_id;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER reputation_update_trigger
-AFTER INSERT ON reputation_events
-FOR EACH ROW EXECUTE FUNCTION update_trust_score();
-```
+❌ **Discovery Circles**
+- Database schema exists but no UI
+- Designed for Phase 2
+- **Why:** Focusing on individual tastemaker discovery first
 
 ---
 
-#### 5. The Drop Mechanism (Days 8-10)
+## Philosophy Shift
 
-**Database Schema**:
-```sql
-CREATE TABLE drops (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id),
-  track_id VARCHAR(255) NOT NULL,
-  track_name VARCHAR(500) NOT NULL,
-  artist_name VARCHAR(500) NOT NULL,
+**Original Concept (Discarded):**
+- Stake reputation → Community validates → Earn/lose points
+- Competitive leaderboards
+- Gamified trust scores
 
-  -- The core innovation
-  context TEXT NOT NULL, -- Why this track matters
-  listening_notes TEXT, -- What to listen for
-  reputation_stake INTEGER NOT NULL CHECK (reputation_stake >= 10 AND reputation_stake <= 100),
+**Current Model (Implemented):**
+- Share 10 drops/week → Build following → Organic discovery
+- No validation or voting
+- No public metrics
+- Pure curation and taste matching
 
-  -- Validation tracking
-  validation_score DECIMAL(3,2) DEFAULT 0, -- 0.0 to 1.0
-  validation_count INTEGER DEFAULT 0,
-
-  -- Lifecycle
-  status VARCHAR(20) DEFAULT 'active', -- active, validated, failed
-  expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '7 days',
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX idx_drops_user ON drops(user_id, created_at DESC);
-CREATE INDEX idx_drops_active ON drops(status, created_at DESC) WHERE status = 'active';
-
--- Drop validations (others rating the drop)
-CREATE TABLE drop_validations (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  drop_id UUID REFERENCES drops(id),
-  validator_id UUID REFERENCES auth.users(id),
-  rating INTEGER CHECK (rating BETWEEN 1 AND 5), -- 1 = bad rec, 5 = amazing
-  listened BOOLEAN DEFAULT false, -- Did they actually listen?
-  created_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(drop_id, validator_id)
-);
-
-CREATE INDEX idx_validations_drop ON drop_validations(drop_id);
-```
-
-**File: `app/api/drops/create/route.ts`**
-```typescript
-export async function POST(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-
-  const { track_id, context, listening_notes, reputation_stake } = await request.json();
-
-  // Validate user has enough reputation
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('reputation_available')
-    .eq('id', user!.id)
-    .single();
-
-  if (profile.reputation_available < reputation_stake) {
-    return Response.json({ error: 'Insufficient reputation' }, { status: 400 });
-  }
-
-  // Get track metadata from Spotify
-  const trackMeta = await fetchSpotifyTrack(track_id);
-
-  // Create drop
-  const { data: drop } = await supabase
-    .from('drops')
-    .insert({
-      user_id: user!.id,
-      track_id,
-      track_name: trackMeta.name,
-      artist_name: trackMeta.artists[0].name,
-      context,
-      listening_notes,
-      reputation_stake
-    })
-    .select()
-    .single();
-
-  // Record reputation event
-  await supabase.from('reputation_events').insert({
-    user_id: user!.id,
-    event_type: 'drop_created',
-    points_change: 0, // No change yet, just staking
-    related_drop_id: drop.id,
-    metadata: { stake: reputation_stake }
-  });
-
-  return Response.json({ drop });
-}
-```
-
-**Deliverable**: Users can stake reputation on track recommendations
+**Result:** Anti-gamification platform focused on finding tastemakers you trust
 
 ---
 
-#### 6. Validation Feed & Resolution (Days 11-12)
+## What's Next: Phase 2 Features
 
-**File: `app/feed/page.tsx`**
-```typescript
-export default async function FeedPage() {
-  const supabase = createServerComponentClient({ cookies });
+### Immediate Priorities (Next 2-4 Weeks)
 
-  const { data: drops } = await supabase
-    .from('drops')
-    .select(`
-      *,
-      profiles:user_id (username, avatar_url, trust_score),
-      drop_validations (rating, validator_id)
-    `)
-    .eq('status', 'active')
-    .order('created_at', { ascending: false })
-    .limit(20);
+**1. Algorithm & Matching**
+- [ ] Background job to calculate `user_genre_stats` (currently manual)
+- [ ] Taste compatibility algorithm (find similar curators)
+- [ ] "You might like" recommendations on discover page
+- [ ] Personalized curator suggestions based on your saves
 
-  return (
-    <div>
-      {drops.map(drop => (
-        <DropCard key={drop.id} drop={drop} />
-      ))}
-    </div>
-  );
-}
-```
+**2. Search & Filtering**
+- [ ] Search drops by track name, artist, or curator
+- [ ] Advanced filters on feed (genre, date range)
+- [ ] Search curators by genre or keywords in curation statements
 
-**File: `components/DropCard.tsx`**
-```typescript
-'use client';
+**3. Analytics Dashboard**
+- [ ] For curators: see which drops get most saves
+- [ ] Track follower growth over time
+- [ ] Genre breakdown of your audience
+- [ ] Click-through rates to streaming platforms
 
-export function DropCard({ drop }) {
-  const [rating, setRating] = useState(0);
+**4. Weekly Recap**
+- [ ] Email digest: "Top drops this week from your network"
+- [ ] Highlight new curators in your genres
+- [ ] Your stats: X saves received, Y new followers
 
-  async function submitValidation() {
-    await fetch('/api/drops/validate', {
-      method: 'POST',
-      body: JSON.stringify({
-        drop_id: drop.id,
-        rating,
-        listened: true
-      })
-    });
-  }
+### Medium-Term Features (1-2 Months)
 
-  return (
-    <div className="border rounded-lg p-6">
-      {/* Track info */}
-      <div className="flex gap-4">
-        <img src={drop.album_art} className="w-20 h-20" />
-        <div>
-          <h3>{drop.track_name}</h3>
-          <p>{drop.artist_name}</p>
-        </div>
-      </div>
+**5. Discovery Circles (Phase 2)**
+- [ ] Build UI for existing database schema
+- [ ] Create/join circles (max 150 members)
+- [ ] Circle-specific feeds
+- [ ] Circle moderation tools
+- [ ] Public vs private circles
 
-      {/* The context - the innovation */}
-      <div className="mt-4">
-        <h4>Why this matters:</h4>
-        <p>{drop.context}</p>
+**6. Enhanced Profiles**
+- [ ] Profile editing page
+- [ ] Upload custom avatar
+- [ ] Add social links (Instagram, Twitter, personal site)
+- [ ] "About my taste" expanded section
+- [ ] Featured drops (pin your best)
 
-        {drop.listening_notes && (
-          <>
-            <h4>What to listen for:</h4>
-            <p>{drop.listening_notes}</p>
-          </>
-        )}
-      </div>
+**7. Notifications**
+- [ ] Email: New follower
+- [ ] Email: Someone you follow posted a drop
+- [ ] Email: Weekly summary
+- [ ] In-app notification center
 
-      {/* Stakes */}
-      <div className="mt-4 flex items-center gap-2">
-        <span className="text-sm text-gray-500">
-          {drop.profiles.username} staked {drop.reputation_stake} points
-        </span>
-        <span className="text-xs">
-          Trust: {drop.profiles.trust_score}
-        </span>
-      </div>
+**8. Platform Partnerships**
+- [ ] Formalize Spotify attribution tracking
+- [ ] Negotiate revenue share for clicks
+- [ ] Add Apple Music, YouTube Music, Tidal support
+- [ ] API for platforms to query curator data
 
-      {/* Validation */}
-      <div className="mt-4">
-        <p>Rate this recommendation:</p>
-        <StarRating value={rating} onChange={setRating} />
-        <button onClick={submitValidation}>Submit</button>
-      </div>
-    </div>
-  );
-}
-```
+### Long-Term Vision (3-6 Months)
 
-**File: `lib/cron/resolve-drops.ts`**
-```typescript
-// Run daily to resolve expired drops
-export async function resolveExpiredDrops() {
-  const supabase = createClient();
+**9. Mobile App**
+- [ ] React Native app (iOS/Android)
+- [ ] Push notifications for new drops
+- [ ] Optimized mobile experience
+- [ ] Share drops from mobile
 
-  const { data: expiredDrops } = await supabase
-    .from('drops')
-    .select(`
-      id,
-      user_id,
-      reputation_stake,
-      drop_validations (rating)
-    `)
-    .eq('status', 'active')
-    .lt('expires_at', new Date())
-    .gte('validation_count', 3); // Min 3 validations required
+**10. Premium Tier** (Optional)
+- [ ] Advanced analytics
+- [ ] Unlimited drops per week (free: 10/week)
+- [ ] Early access to new features
+- [ ] Custom profile themes
+- [ ] Priority support
 
-  for (const drop of expiredDrops) {
-    // Calculate average rating
-    const avgRating = drop.drop_validations.reduce((sum, v) => sum + v.rating, 0) / drop.drop_validations.length;
-    const validationScore = avgRating / 5; // Normalize to 0-1
+**11. Label/Artist Tools**
+- [ ] Curator outreach dashboard
+- [ ] Campaign tracking
+- [ ] Analytics for releases
+- [ ] Paid promotion to curators (opt-in)
 
-    // Determine outcome
-    let pointsChange = 0;
-    let status = 'validated';
-
-    if (validationScore >= 0.7) {
-      // Great recommendation - return stake + bonus
-      pointsChange = drop.reputation_stake + Math.floor(drop.reputation_stake * 0.5);
-      status = 'validated';
-    } else if (validationScore >= 0.4) {
-      // Okay recommendation - return stake
-      pointsChange = drop.reputation_stake;
-      status = 'validated';
-    } else {
-      // Bad recommendation - lose stake
-      pointsChange = -drop.reputation_stake;
-      status = 'failed';
-    }
-
-    // Update drop
-    await supabase
-      .from('drops')
-      .update({ status, validation_score: validationScore })
-      .eq('id', drop.id);
-
-    // Record reputation event
-    await supabase.from('reputation_events').insert({
-      user_id: drop.user_id,
-      event_type: status === 'failed' ? 'drop_failed' : 'drop_validated',
-      points_change: pointsChange,
-      related_drop_id: drop.id,
-      metadata: {
-        stake: drop.reputation_stake,
-        validation_score: validationScore,
-        validator_count: drop.drop_validations.length
-      }
-    });
-  }
-}
-```
-
-**Deliverable**: Complete feedback loop - drops get validated, reputation changes based on community response
+**12. Advanced Taste Matching**
+- [ ] Collaborative filtering (users who liked X also liked Y)
+- [ ] Genre expertise scoring
+- [ ] Taste compatibility percentage
+- [ ] "Find your music twin" feature
 
 ---
 
-## Week 4: Polish & User Testing
+## Database Schema Status
 
-#### 7. Basic UI/UX (Days 13-14)
-- Onboarding flow: "Connect Spotify → See your top genres → Make your first drop"
-- Profile pages showing trust score history
-- Simple feed with filtering (by genre, by trust score)
+### Implemented Tables
 
-#### 8. Deploy & Test (Day 15)
-- Deploy to Vercel
-- Invite 20 music-obsessed friends
-- Watch behavior: Are they staking real reputation? Are validations honest?
+✅ `profiles` - User accounts with curation statements
+✅ `drops` - Music recommendations (no expiration, no stakes)
+✅ `follows` - Asymmetric following relationships
+✅ `drop_saves` - Private saved drops
+✅ `user_genre_stats` - Activity per genre per user
+✅ `platform_clicks` - Click tracking for attribution
 
----
+### Planned (Schema Ready, UI Pending)
 
-## Success Metrics for MVP
+⏳ `circles` - Discovery circles (max 150 members)
+⏳ `circle_memberships` - Circle membership tracking
 
-After 2 weeks with 20 users:
+### Removed from Original Design
 
-**Primary**:
-- **Drop Rate**: Do users make at least 2 drops/week?
-- **Stake Meaningfulness**: Are users risking 30+ points (shows they care)?
-- **Validation Honesty**: Do validation scores vary (or is everyone giving 5 stars)?
-
-**Secondary**:
-- Time spent reading context vs just clicking through
-- Trust score distribution (are high-trust users emerging?)
-- Return rate (do they come back after first drop?)
+❌ `drop_validations` - Removed (no validation system)
+❌ `reputation_events` - Removed (no reputation stakes)
+❌ `listening_history` - Never built (no OAuth sync)
+❌ `spotify_connections` - Never built (using public API)
 
 ---
 
-## What We're NOT Building in MVP
+## Success Metrics
 
-❌ Discovery Circles (comes after we prove drops work)
-❌ Advanced taste matching (start with simple genre tags)
-❌ Premium features (free for everyone in testing)
-❌ Multiple streaming platforms (Spotify only)
-❌ Mobile app (responsive web only)
-❌ Social features (follows, DMs, etc.)
+### Current Focus (MVP Testing)
+
+**Engagement:**
+- % of users who complete onboarding
+- Average drops per active user per week
+- % of users who follow at least 1 curator within 7 days
+
+**Content Quality:**
+- Average context length per drop
+- % of drops with listening notes
+- Distribution of drops across genres
+
+**Network Effects:**
+- Follower growth rate
+- % of drops that get saved
+- Average saves per drop
+
+### Future Metrics (Phase 2)
+
+**Community:**
+- Circle creation rate
+- Average circle membership
+- Active circles (>10 members posting regularly)
+
+**Monetization:**
+- Platform click-through rate
+- Attribution revenue from partners
+- Premium conversion rate (if implemented)
 
 ---
 
-## Why This Order?
+## Development Timeline
 
-1. **Spotify integration first** = Proves we can access the data that makes this authentic
-2. **Drops + stakes second** = Validates the core mechanic
-3. **Validation + resolution third** = Completes the feedback loop
-4. **No circles yet** = Don't build community features until we know people care about drops
+### Completed (MVP - 6 weeks)
 
-If drops don't create engagement, circles won't save it. If they do, we've validated the foundation and can build circles, taste matching, and premium features on solid ground.
+**Week 1-2:** Foundation
+- Next.js 14 + Supabase setup
+- Database schema design
+- Authentication flow
+
+**Week 3-4:** Core Features
+- Drop creation with weekly limits
+- Track search (Spotify public API)
+- Feed display
+
+**Week 5-6:** Discovery & Following
+- Following system
+- Discover page with filters
+- Profile pages with taste areas
+- Save functionality
+
+### Next (Phase 2 - 8 weeks)
+
+**Week 7-8:** Algorithm & Search
+- Genre stats calculation job
+- Taste compatibility
+- Search functionality
+
+**Week 9-10:** Analytics & Insights
+- Dashboard for curators
+- Weekly recaps
+- Email notifications
+
+**Week 11-12:** Circles UI
+- Circle creation flow
+- Circle browsing
+- Circle feeds
+
+**Week 13-14:** Platform Partnerships
+- Attribution reporting
+- API documentation
+- Revenue share implementation
 
 ---
 
-## My Recommendation: Start NOW
+## Technical Debt & Improvements
 
-Would you like me to:
-1. **Initialize the Next.js + Supabase project structure**
-2. **Implement Spotify OAuth flow**
-3. **Design the complete database schema**
-4. **Something else?**
+### High Priority
 
-The fastest path to validation is getting Spotify connected and drops live. Let's build.
+- [ ] Add pagination to feed (currently loads all drops)
+- [ ] Implement caching for user profiles
+- [ ] Add rate limiting to API routes
+- [ ] Write integration tests for drop creation flow
+- [ ] Add error boundary components
+- [ ] Implement proper loading states
+
+### Medium Priority
+
+- [ ] Optimize database queries (add more indexes)
+- [ ] Add image optimization for album art
+- [ ] Implement lazy loading for drop cards
+- [ ] Add analytics tracking (PostHog or similar)
+- [ ] Set up error monitoring (Sentry)
+
+### Low Priority
+
+- [ ] Add keyboard shortcuts for power users
+- [ ] Dark mode support
+- [ ] PWA capabilities (offline support)
+- [ ] Accessibility audit and improvements
+
+---
+
+## Deployment Checklist
+
+### Pre-Launch
+
+- [x] Database migration complete
+- [x] All features tested locally
+- [ ] Create production Supabase project
+- [ ] Push migrations to production
+- [ ] Set up Vercel deployment
+- [ ] Configure environment variables
+- [ ] Test production build
+- [ ] Set up domain (if applicable)
+
+### Launch Day
+
+- [ ] Deploy to production
+- [ ] Verify all features work
+- [ ] Invite alpha testers (10-20 users)
+- [ ] Monitor error logs
+- [ ] Collect initial feedback
+
+### Post-Launch (Week 1)
+
+- [ ] Daily check-ins with alpha users
+- [ ] Fix critical bugs
+- [ ] Gather feature requests
+- [ ] Optimize based on usage patterns
+- [ ] Plan Phase 2 priorities based on feedback
+
+---
+
+## Questions to Answer with User Testing
+
+### Core Mechanic Validation
+
+1. **Do users understand the 10/week limit?** Is it restrictive or helpful?
+2. **Are curation statements valuable?** Do users read them before following?
+3. **Is following organic?** Or do users need more discovery tools?
+4. **Are saves meaningful?** Or do users want more engagement options?
+
+### Feature Priorities
+
+5. **Do users want circles?** Or is following individuals enough?
+6. **What discovery tools matter most?** Search? Recommendations? Trending?
+7. **Should we add any social features?** Comments? Reactions? Shares?
+8. **What analytics do curators want to see?**
+
+### Growth & Retention
+
+9. **What drives users to return?** New drops? New curators? Something else?
+10. **What causes drop-off?** Empty following list? Not enough content?
+
+---
+
+## How to Contribute
+
+### For Developers
+
+1. Read [README.md](./README.md) for setup instructions
+2. Check [ARCHITECTURE.md](./ARCHITECTURE.md) for system design
+3. Review [README_QUICKSTART.md](./README_QUICKSTART.md) for testing
+4. Pick a feature from "What's Next" section above
+5. Open a PR with your implementation
+
+### For Testers
+
+1. Follow [README_QUICKSTART.md](./README_QUICKSTART.md)
+2. Test all features thoroughly
+3. Document bugs or confusing UX
+4. Suggest improvements
+5. Report feedback in issues
+
+---
+
+## Contact & Support
+
+This project is in active development. For questions or feedback, please open an issue on GitHub.
+
+**Built with care for music discovery.**

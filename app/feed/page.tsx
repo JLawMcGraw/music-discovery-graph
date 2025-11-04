@@ -1,98 +1,166 @@
 import { createClient } from '@/lib/supabase/server'
-import { DropCard } from '@/components/DropCard'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import FeedTabs from '@/components/FeedTabs'
+import InfiniteScrollFeed from '@/components/InfiniteScrollFeed'
 
 export const dynamic = 'force-dynamic'
 
-export default async function FeedPage() {
+interface SearchParams {
+  tab?: string
+}
+
+export default async function FeedPage({
+  searchParams,
+}: {
+  searchParams: SearchParams
+}) {
   const supabase = createClient()
 
-  // Get current user
+  // Check authentication
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Fetch active drops with user profiles
-  const { data: drops, error } = await supabase
-    .from('drops')
-    .select(`
-      *,
-      profiles:user_id (
-        username,
-        avatar_url,
-        trust_score
-      ),
-      drop_validations (
-        rating,
-        validator_id
-      )
-    `)
-    .eq('status', 'active')
-    .order('created_at', { ascending: false })
-    .limit(20)
+  if (!user) {
+    redirect('/auth/signin')
+  }
 
-  if (error) {
-    console.error('Error fetching drops:', error)
+  // Check if user completed onboarding
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('onboarded, username')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.onboarded) {
+    redirect('/onboarding')
+  }
+
+  const activeTab = (searchParams.tab === 'discover' ? 'discover' : 'following') as 'following' | 'discover'
+
+  // Fetch initial page of drops (20 items)
+  let initialDrops: any[] = []
+  let initialCursor: string | null = null
+  let initialHasMore = false
+
+  if (activeTab === 'following') {
+    // Get following list
+    const { data: following } = await supabase
+      .from('follows')
+      .select('following_id')
+      .eq('follower_id', user.id)
+
+    const followingIds = following?.map((f) => f.following_id) || []
+
+    if (followingIds.length > 0) {
+      const { data: drops } = await supabase
+        .from('drops')
+        .select(`
+          *,
+          profiles:user_id (
+            username,
+            display_name,
+            avatar_url,
+            follower_count
+          )
+        `)
+        .in('user_id', followingIds)
+        .order('created_at', { ascending: false })
+        .limit(21) // Fetch 21 to check if more exist
+
+      if (drops && drops.length > 0) {
+        initialHasMore = drops.length > 20
+        initialDrops = drops.slice(0, 20)
+        initialCursor = initialDrops[initialDrops.length - 1].created_at
+
+        // Get save status for initial drops
+        const dropIds = initialDrops.map(d => d.id)
+        const { data: savedDrops } = await supabase
+          .from('drop_saves')
+          .select('drop_id')
+          .eq('user_id', user.id)
+          .in('drop_id', dropIds)
+
+        const savedDropIds = new Set(savedDrops?.map(s => s.drop_id) || [])
+        initialDrops = initialDrops.map(drop => ({
+          ...drop,
+          isSaved: savedDropIds.has(drop.id)
+        }))
+      }
+    }
+  } else {
+    // Discover: all drops
+    const { data: drops } = await supabase
+      .from('drops')
+      .select(`
+        *,
+        profiles:user_id (
+          username,
+          display_name,
+          avatar_url,
+          follower_count
+        )
+      `)
+      .order('created_at', { ascending: false })
+      .limit(21)
+
+    if (drops && drops.length > 0) {
+      initialHasMore = drops.length > 20
+      initialDrops = drops.slice(0, 20)
+      initialCursor = initialDrops[initialDrops.length - 1].created_at
+
+      // Get save status
+      const dropIds = initialDrops.map(d => d.id)
+      const { data: savedDrops } = await supabase
+        .from('drop_saves')
+        .select('drop_id')
+        .eq('user_id', user.id)
+        .in('drop_id', dropIds)
+
+      const savedDropIds = new Set(savedDrops?.map(s => s.drop_id) || [])
+      initialDrops = initialDrops.map(drop => ({
+        ...drop,
+        isSaved: savedDropIds.has(drop.id)
+      }))
+    }
   }
 
   return (
     <div className="min-h-screen bg-gray-900 py-8 px-4">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-3xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
-              Signal
-            </h1>
-            <p className="text-gray-400">Discover music through trusted humans</p>
-          </div>
-          {user ? (
-            <div className="flex gap-3">
-              <Link
-                href="/drop/create"
-                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-lg transition-all"
-              >
-                Create Drop
-              </Link>
-              <Link
-                href={`/profile/${user.id}`}
-                className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-lg transition-colors"
-              >
-                Profile
-              </Link>
-            </div>
-          ) : (
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold text-white">Feed</h1>
+          <div className="flex gap-3">
             <Link
-              href="/auth/signin"
-              className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors"
+              href="/discover"
+              className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors"
             >
-              Sign In
+              Discover
             </Link>
-          )}
+            <Link
+              href="/drop/create"
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors"
+            >
+              New Drop
+            </Link>
+          </div>
         </div>
 
-        {/* Feed */}
-        {drops && drops.length > 0 ? (
-          <div className="space-y-6">
-            {drops.map((drop) => (
-              <DropCard key={drop.id} drop={drop} currentUserId={user?.id} />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-16">
-            <div className="text-6xl mb-4">🎵</div>
-            <h2 className="text-2xl font-semibold text-white mb-2">No drops yet</h2>
-            <p className="text-gray-400 mb-6">Be the first to stake your reputation on a recommendation!</p>
-            {user && (
-              <Link
-                href="/drop/create"
-                className="inline-block px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-lg transition-all"
-              >
-                Create First Drop
-              </Link>
-            )}
-          </div>
-        )}
+        {/* Tabs */}
+        <FeedTabs activeTab={activeTab} />
+
+        {/* Infinite Scroll Feed */}
+        <div className="mt-6">
+          <InfiniteScrollFeed
+            initialDrops={initialDrops}
+            initialCursor={initialCursor}
+            initialHasMore={initialHasMore}
+            tab={activeTab}
+            currentUserId={user.id}
+          />
+        </div>
       </div>
     </div>
   )

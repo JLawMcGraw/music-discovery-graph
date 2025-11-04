@@ -8,14 +8,13 @@ const createDropSchema = z.object({
   track_name: z.string().min(1).max(500),
   artist_name: z.string().min(1).max(500),
   album_name: z.string().max(500).optional(),
-  album_art_url: z.string().url().optional(),
-  external_url: z.string().url(),
-  preview_url: z.string().url().optional(),
+  album_art_url: z.string().url().nullish(),
+  external_url: z.string().url().nullish(),
+  preview_url: z.string().url().nullish(),
   context: z.string().min(50, 'Context must be at least 50 characters').max(2000),
   listening_notes: z.string().max(1000).optional(),
-  reputation_stake: z.number().int().min(10).max(100),
   genres: z.array(z.string()).optional(),
-  mood_tags: z.array(z.string()).optional(),
+  moods: z.array(z.string()).optional(),
 })
 
 export async function POST(request: Request) {
@@ -36,43 +35,29 @@ export async function POST(request: Request) {
     const body = await request.json()
     const validatedData = createDropSchema.parse(body)
 
-    // Get user's profile to check available reputation
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('reputation_available, tier')
-      .eq('id', user.id)
-      .single()
+    // Check weekly drop limit (10 drops per week for all users)
+    const { data: weeklyCount, error: countError } = await supabase
+      .rpc('get_weekly_drop_count', { user_uuid: user.id })
 
-    if (profileError || !profile) {
-      return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+    if (countError) {
+      console.error('Weekly count check error:', countError)
+      return NextResponse.json({ error: 'Failed to check drop limit' }, { status: 500 })
     }
 
-    // Check if user has enough reputation
-    if (profile.reputation_available < validatedData.reputation_stake) {
+    if (weeklyCount >= 10) {
+      // Get next reset time
+      const { data: nextReset } = await supabase.rpc('get_next_week_reset')
+
       return NextResponse.json(
         {
-          error: 'Insufficient reputation',
-          available: profile.reputation_available,
-          required: validatedData.reputation_stake,
+          error: 'Weekly limit reached',
+          message: 'You can post 10 drops per week. This helps you curate your best picks.',
+          drops_this_week: weeklyCount,
+          limit: 10,
+          resets_at: nextReset,
         },
-        { status: 400 }
+        { status: 429 }
       )
-    }
-
-    // Check rate limits for free tier
-    if (profile.tier === 'free') {
-      const { count } = await supabase
-        .from('drops')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-
-      if (count && count >= 3) {
-        return NextResponse.json(
-          { error: 'Daily limit reached (3 drops/day for free tier)' },
-          { status: 429 }
-        )
-      }
     }
 
     // Create the drop
@@ -90,25 +75,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to create drop' }, { status: 500 })
     }
 
-    // Record reputation event (staking points)
-    const { error: reputationError } = await supabase.from('reputation_events').insert({
-      user_id: user.id,
-      event_type: 'drop_created',
-      points_change: 0, // No immediate change, just staking
-      new_trust_score: profile.reputation_available, // Will be updated by trigger
-      new_reputation_available: profile.reputation_available - validatedData.reputation_stake,
-      related_drop_id: drop.id,
-      metadata: {
-        stake: validatedData.reputation_stake,
+    return NextResponse.json(
+      {
+        drop,
+        drops_this_week: weeklyCount + 1,
+        limit: 10,
       },
-    })
-
-    if (reputationError) {
-      console.error('Reputation event error:', reputationError)
-      // Don't fail the request, drop was created
-    }
-
-    return NextResponse.json({ drop }, { status: 201 })
+      { status: 201 }
+    )
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

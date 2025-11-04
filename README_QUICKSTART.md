@@ -1,24 +1,13 @@
-# Signal MVP - Quick Start Guide
+# DeepCuts - Quick Start Guide
 
-## What You Just Built
+This guide will get you up and running with DeepCuts locally in ~10 minutes.
 
-A working music discovery platform where:
-- Users stake reputation on track recommendations
-- Community validates drops with ratings
-- Trust scores update based on validation outcomes
-- Platform tracks clicks for future revenue attribution
+## Prerequisites
 
-**No listening history needed** - trust is built through behavior, not data access.
+- **Node.js 18+** ([download](https://nodejs.org/))
+- **Spotify Developer Account** (free - for track search API)
 
----
-
-## Getting Started
-
-### Prerequisites
-
-1. **Node.js 18+** - [Download](https://nodejs.org/)
-2. **Supabase CLI** - `npm install -g supabase`
-3. **Spotify Developer Account** - [Sign up](https://developer.spotify.com/dashboard)
+## Setup Steps
 
 ### 1. Install Dependencies
 
@@ -26,24 +15,34 @@ A working music discovery platform where:
 npm install
 ```
 
-### 2. Set Up Spotify App
+### 2. Get Spotify Credentials
 
 1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-2. Create a new app
-3. No redirect URI needed (we're only using public search API)
-4. Copy your **Client ID** and **Client Secret**
+2. Log in or create account
+3. Click "Create App"
+4. Fill in:
+   - **App Name**: DeepCuts Local
+   - **App Description**: Music curation platform
+   - **Website**: http://localhost:3000
+   - **Redirect URI**: http://localhost:3000 (not used but required)
+5. Click "Save"
+6. Click "Settings" → copy **Client ID** and **Client Secret**
 
 ### 3. Configure Environment
 
-```bash
-cp .env.local.example .env.local
-```
-
-Edit `.env.local` and add your Spotify credentials:
+Create `.env.local` in project root:
 
 ```env
-SPOTIFY_CLIENT_ID=your_client_id_here
-SPOTIFY_CLIENT_SECRET=your_client_secret_here
+# Spotify API (for track search)
+SPOTIFY_CLIENT_ID=paste-your-client-id-here
+SPOTIFY_CLIENT_SECRET=paste-your-client-secret-here
+
+# Supabase (will be filled after next step)
+NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+NEXT_PUBLIC_SUPABASE_ANON_KEY=will-be-filled-next
+
+# App URL
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
 ### 4. Start Supabase
@@ -52,324 +51,314 @@ SPOTIFY_CLIENT_SECRET=your_client_secret_here
 supabase start
 ```
 
-This will:
-- Start local Postgres database on port 54322
-- Start Supabase Studio on http://localhost:54323
-- Apply database migrations automatically
-- Show you the `anon key` and `service_role key`
+**First time?** This will download Docker images (~5 minutes).
 
-Copy the `anon key` from the output and add it to `.env.local`:
+**Expected output:**
+```
+Started supabase local development setup.
 
-```env
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key_here
+         API URL: http://localhost:54321
+          DB URL: postgresql://postgres:postgres@localhost:54322/postgres
+      Studio URL: http://localhost:54323
+        anon key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
-### 5. Run Development Server
+**→ Copy the `anon key` to your `.env.local` file as `NEXT_PUBLIC_SUPABASE_ANON_KEY`**
+
+**→ Keep this terminal window open!** Supabase needs to stay running.
+
+### 5. Run Database Migration
+
+Open a **new terminal window** in the project directory:
+
+```bash
+supabase db push
+```
+
+This creates all database tables:
+- User profiles with curation statements
+- Drops (music recommendations)
+- Following relationships
+- Private saves
+- Genre activity stats
+
+### 6. Generate TypeScript Types
+
+```bash
+npm run db:types
+```
+
+### 7. Start Development Server
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+Open http://localhost:3000 in your browser!
 
 ---
 
-## Testing the MVP
+## First-Time User Flow
 
-### Create a Test User
+### 1. Sign Up
 
-1. Go to Supabase Studio: http://localhost:54323
-2. Navigate to **Authentication** > **Users**
-3. Click **Add user** > Create manually
-4. Enter email and password
-5. Confirm user immediately
+1. Go to http://localhost:3000
+2. Click "Sign In" → "Sign Up"
+3. Enter email and password
+4. Sign up
 
-### Create a Profile
+### 2. Complete Onboarding (4 Steps)
 
-In Supabase Studio SQL Editor, run:
+**Step 1: Username**
+- Choose a unique username (e.g., `jazzlover42`)
+- Add optional display name
 
-```sql
-INSERT INTO profiles (id, username, display_name)
-VALUES (
-  'your-user-id-from-auth-users',
-  'testuser',
-  'Test User'
-);
-```
+**Step 2: Bio**
+- Write a short bio about your music taste (optional)
 
-### Sign In
+**Step 3: Genres**
+- Select up to 5 genres you're passionate about
+- This helps others discover you
 
-Currently there's no auth UI built, so you'll need to authenticate via Supabase:
+**Step 4: Curation Statement**
+- Explain how you curate music (optional but recommended)
+- Examples:
+  - "I dig for rare soul and funk 45s from regional labels"
+  - "Contemporary classical that pushes boundaries"
+  - "90s hip hop deep cuts and forgotten producers"
 
-```javascript
-// In browser console on http://localhost:3000
-const { data, error } = await supabase.auth.signInWithPassword({
-  email: 'test@example.com',
-  password: 'your-password'
-})
-```
+Click "Complete Setup" → You'll land on the feed page!
 
-### Create Your First Drop
+### 3. Create Your First Drop
 
-1. Navigate to http://localhost:3000/drop/create
-2. Search for a track (e.g., "Bohemian Rhapsody")
-3. Select a track
-4. Write context (min 50 chars)
-5. Stake reputation (10-100 points)
-6. Submit
+1. Click "Create Drop" button
+2. **Search for a track** (try "Blue Train John Coltrane")
+3. **Write context** (minimum 50 characters):
+   ```
+   This is Coltrane's breakthrough moment where he found his signature sound.
+   The title track showcases the modal exploration that defined his later work.
+   ```
+4. **Optional**: Add listening notes, genres, moods
+5. Click "Share Drop"
 
-### Validate a Drop
+**Note:** You can post up to 10 drops per week (resets every Monday).
 
-1. Navigate to http://localhost:3000/feed
-2. Find a drop (not your own)
-3. Click **Validate**
-4. Rate 1-5 stars
-5. Submit
+### 4. Follow Other Curators
 
----
+1. Click "Discover" in navigation
+2. **To see other curators:** You'll need to create a second user account
+   - Open an **incognito/private browser window**
+   - Go to http://localhost:3000
+   - Sign up as a different user
+   - Complete onboarding with different curation statement
+   - Create a few drops
+3. **Back to your first user:**
+   - Refresh `/discover` page
+   - You should see the second user
+   - Click "Follow" button
+4. Go to "Feed" → "Following" tab
+   - See drops only from people you follow
 
-## Database Structure
+### 5. Save Drops You Love
 
-### Key Tables
-
-**profiles**
-- User profiles with trust scores
-- Reputation available for staking
-- Success rate tracking
-
-**drops**
-- Music recommendations with context
-- Reputation stakes (10-100 points)
-- Validation scores (0-1)
-- Status: active → validated/failed
-
-**drop_validations**
-- Community ratings (1-5 stars)
-- One validation per user per drop
-- Triggers reputation updates
-
-**reputation_events**
-- Immutable ledger of all reputation changes
-- Provides auditability
-- Auto-updates trust scores via triggers
-
-**platform_clicks**
-- Tracks clicks to streaming platforms
-- For conversion attribution (future revenue)
-
-### Reputation Mechanics
-
-When a drop is created:
-```sql
--- User stakes 50 points
-reputation_available: 100 → 50
-trust_score: 100 (unchanged, points locked)
-```
-
-After 7 days or 3+ validations:
-```sql
--- If average rating >= 3.5/5 (70%)
-points_returned: stake + 25% bonus
-trust_score increases
-
--- If average rating 2-3.5/5 (40-70%)
-points_returned: original stake
-trust_score unchanged
-
--- If average rating < 2/5 (40%)
-points_returned: 0
-trust_score decreases
-```
+1. On any drop (that's not yours), click "Save" button
+2. Click "Saved" in navigation
+3. See all your saved drops (private - only you can see)
 
 ---
 
-## What's Built
+## Testing the Weekly Limit
 
-✅ **Database Schema**
-- Complete with triggers, RLS policies, and helper functions
-- No listening history tables (simplified architecture)
+**Default: 10 drops per week (resets Monday 00:00 UTC)**
 
-✅ **API Routes**
-- `/api/search/tracks` - Spotify track search (no OAuth needed)
-- `/api/drops/create` - Create drops with validation
-- `/api/drops/[id]/validate` - Submit ratings
-- `/api/drops/[id]/click` - Track platform clicks
+1. Create 10 drops
+2. Try to create an 11th drop
+3. **Expected:** See "Weekly Limit Reached" message
+4. **To reset manually** (for testing):
+   ```bash
+   # Reset Supabase database (clears all data)
+   supabase db reset
 
-✅ **UI Components**
-- `TrackSearch` - Real-time Spotify search
-- `DropCard` - Display drops with validation UI
-- Drop creation form with context editor
-- Feed page with infinite scroll ready
-
-✅ **Features**
-- Reputation staking (10-100 points)
-- Context-rich recommendations (50-2000 chars)
-- Star rating validation system
-- Click tracking for attribution
-- Rate limiting (3 drops/day for free tier)
+   # Then migrate again
+   supabase db push
+   ```
 
 ---
 
-## What's Missing (Intentionally)
+## Explore Features
 
-These are **not needed for MVP**:
+### Feed Page (`/feed`)
+- **Discover tab**: All drops from all users
+- **Following tab**: Drops only from people you follow
+- Toggle between tabs
 
-❌ Listening history sync
-❌ OAuth flow (using public Spotify API)
-❌ Discovery circles (Phase 2)
-❌ Advanced taste matching (Phase 2)
-❌ Premium subscription UI (Phase 2)
-❌ Email notifications
-❌ Mobile app
+### Discover Page (`/discover`)
+- Browse curators by genre
+- Filter dropdown (select genre)
+- Sort by: Followers / Most Active / Newest
+- One-click follow buttons
 
----
+### Profile Page (`/profile/username`)
+- View curation statement
+- See taste areas (genres they're active in)
+- Stats: drops, followers, following
+- Follow/Unfollow button (if not your profile)
+- View all their drops
 
-## Next Steps
+### Saved Page (`/saved`)
+- Your private collection of saved drops
+- Accessible only to you
 
-### Immediate (Week 1)
-
-1. **Add Auth UI**
-   - Sign up / sign in pages
-   - Profile creation flow
-   - Session management
-
-2. **Reputation Resolution Cron**
-   - Daily job to resolve expired drops
-   - Calculate outcomes based on ratings
-   - Update trust scores accordingly
-
-3. **Profile Pages**
-   - Show user's drops
-   - Display trust score history
-   - Genre expertise breakdown
-
-### Near-term (Week 2-3)
-
-4. **Onboarding Flow**
-   - Welcome tutorial
-   - Genre preference selection
-   - First drop guidance
-
-5. **Analytics Dashboard**
-   - Drop performance metrics
-   - Click-through rates
-   - Validation trends
-
-6. **Search & Filters**
-   - Filter feed by genre
-   - Filter by trust score threshold
-   - Search drops by track/artist
-
-### Medium-term (Month 2)
-
-7. **Discovery Circles**
-   - Create hyper-specific communities
-   - Max 150 members (Dunbar's number)
-   - Circle-specific feeds
-
-8. **Platform Partnerships**
-   - Attribution reporting
-   - Revenue share negotiation
-   - API for curator data
+### Drop Creation (`/drop/create`)
+- Weekly counter (X/10)
+- Reset timer shown
+- Track search
+- Context writing (required, 50-2000 chars)
 
 ---
 
-## Architecture Decisions
+## Supabase Studio (Database UI)
 
-### Why No Listening History?
+Open http://localhost:54323 to explore your database:
 
-**Problem:** Syncing listening history is complex and expensive
-- Requires OAuth for each platform
-- Background jobs cost $150-200/month at scale
-- Privacy concerns
-- Platform lock-in
+1. **Table Editor** → View/edit data:
+   - `profiles` - user accounts
+   - `drops` - all music drops
+   - `follows` - who follows whom
+   - `drop_saves` - saved drops
+   - `user_genre_stats` - activity per genre
 
-**Solution:** Trust through behavior, not data
-- Users prove taste through successful drops
-- Cheaper ($50/month vs $160/month at 10K users)
-- Platform-agnostic by default
-- No privacy issues
+2. **SQL Editor** → Run custom queries:
+   ```sql
+   -- See all drops
+   SELECT * FROM drops ORDER BY created_at DESC;
 
-### Why Supabase?
+   -- Check weekly drop count
+   SELECT get_weekly_drop_count('your-user-id-here');
 
-- **Zero ops** - managed Postgres, auth, storage
-- **Real-time** - websockets for live updates (future)
-- **Row Level Security** - built-in auth at DB level
-- **Local development** - `supabase start` = full stack locally
-
-### Why Next.js 14?
-
-- **Server Components** - fast initial page loads
-- **API Routes** - backend in same repo
-- **Type Safety** - TypeScript everywhere
-- **Deployment** - one-click Vercel deploy
+   -- See follows
+   SELECT * FROM follows;
+   ```
 
 ---
 
 ## Troubleshooting
 
-### "Failed to search tracks"
+### "supabase: command not found"
+
+**Install Supabase CLI:**
+```bash
+npm install -g supabase
+```
+
+Or on Windows with Scoop:
+```powershell
+scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
+scoop install supabase
+```
+
+### "Migration failed"
+
+**Reset and try again:**
+```bash
+supabase db reset
+supabase db push
+```
+
+### "Network error" when creating drops
 
 - Check Spotify credentials in `.env.local`
-- Verify both `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` are set
-- Restart dev server after changing `.env.local`
+- Verify Supabase is running: `supabase status`
+- Check browser console for error details
 
-### "Failed to create drop"
-
-- Ensure you're authenticated (check browser console)
-- Verify profile exists in `profiles` table
-- Check you have sufficient `reputation_available`
-
-### "Drop not found"
-
-- Ensure Supabase is running (`supabase status`)
-- Check migrations applied (`supabase db reset`)
-- Verify RLS policies in Supabase Studio
-
-### Database connection issues
+### TypeScript errors in editor
 
 ```bash
-# Reset database
-supabase db reset
+npm run db:types
+```
+Then restart your IDE.
 
-# Check status
+### Port already in use
+
+**Kill existing processes:**
+```bash
+# Stop Supabase
+supabase stop
+
+# Then start again
+supabase start
+```
+
+---
+
+## Quick Command Reference
+
+```bash
+# Start Supabase (required)
+supabase start
+
+# Start development server (in new terminal)
+npm run dev
+
+# View Supabase status
 supabase status
 
-# View logs
-supabase logs
+# Stop Supabase
+supabase stop
+
+# Reset database (clean slate)
+supabase db reset
+
+# Apply migrations
+supabase db push
+
+# Generate TypeScript types
+npm run db:types
+
+# Open Supabase Studio
+# → http://localhost:54323
 ```
 
 ---
 
-## Deployment
+## What's Different from Validation Model?
 
-### Vercel (Frontend)
+This version removes all gamification:
 
-```bash
-# Install Vercel CLI
-npm i -g vercel
+**Removed:**
+- ❌ Validation/rating system (no 1-5 star votes)
+- ❌ Reputation stakes (no points at risk)
+- ❌ Trust scores (no competitive metrics)
+- ❌ Drop expiration (drops live forever)
+- ❌ Leaderboards
 
-# Deploy
-vercel
+**Added:**
+- ✅ Weekly drop limit (10 per week)
+- ✅ Following system (Twitter-style)
+- ✅ Private saves (no public metrics)
+- ✅ Curation statements
+- ✅ Discover page with filters
+- ✅ Taste areas per genre
 
-# Add environment variables in Vercel dashboard
-```
-
-### Supabase (Production)
-
-1. Create project at [supabase.com](https://supabase.com)
-2. Link project: `supabase link --project-ref your-project-ref`
-3. Push migrations: `supabase db push`
-4. Update environment variables in Vercel:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+**Philosophy:**
+- **Old**: "Stake reputation → get validated → earn/lose points"
+- **New**: "Share your taste → build following → organic discovery"
 
 ---
 
-## Questions?
+## Next Steps
 
-- Check `/docs` folder for strategy documents
-- Review `ARCHITECTURE.md` for system design
-- See `PLATFORM_STRATEGY.md` for business model
+1. **Create multiple test users** to test following
+2. **Test weekly limit** (create 10 drops, verify block at 11)
+3. **Try all features** (follow, save, discover)
+4. **Deploy to production** (see main README)
 
-**Built with ♫ and trust**
+**Ready to deploy?** See [README.md](./README.md) for production deployment instructions.
+
+---
+
+## Need Help?
+
+- Check [README.md](./README.md) for full documentation
+- Review [ARCHITECTURE.md](./ARCHITECTURE.md) for system design
+- Open an issue on GitHub for bugs/questions
