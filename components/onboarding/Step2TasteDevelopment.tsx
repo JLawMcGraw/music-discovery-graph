@@ -37,7 +37,9 @@ export default function Step2TasteDevelopment({
     data.discoveryPreferences || []
   )
   const [artists, setArtists] = useState<string[]>(
-    data.favoriteArtists || ['', '', '']
+    data.favoriteArtists && data.favoriteArtists.length > 0
+      ? data.favoriteArtists
+      : ['', '', '', '', '']
   )
 
   const toggleGenre = (genre: string) => {
@@ -136,7 +138,10 @@ export default function Step2TasteDevelopment({
         <h3 className="text-lg font-semibold text-white mb-3">
           Name 3-5 artists you've been obsessed with lately (optional)
         </h3>
-        <div className="space-y-2">
+        <p className="text-sm text-gray-400 mb-3">
+          This helps us recommend curators with similar taste
+        </p>
+        <div className="space-y-3">
           {artists.map((artist, index) => (
             <input
               key={index}
@@ -147,8 +152,8 @@ export default function Step2TasteDevelopment({
                 newArtists[index] = e.target.value
                 setArtists(newArtists)
               }}
-              placeholder={`Artist ${index + 1}`}
-              className="w-full px-4 py-2 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-purple-500 focus:outline-none"
+              placeholder={`Artist ${index + 1} (e.g., Radiohead, Kendrick Lamar)`}
+              className="w-full px-4 py-3 bg-gray-900 text-white rounded-lg border-2 border-gray-700 focus:border-purple-500 focus:outline-none placeholder-gray-500"
             />
           ))}
         </div>

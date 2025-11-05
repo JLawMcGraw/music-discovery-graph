@@ -28,7 +28,7 @@ export default function Step3CuratorChoice({
         How do you want to use DeepCuts?
       </h2>
       <p className="text-gray-400 mb-8">
-        Choose the role that best fits you. You can always change this later.
+        Everyone can both curate and discover. Choose what you'll primarily use DeepCuts for. You can always change this later.
       </p>
 
       <div className="space-y-4 mb-8">
@@ -44,7 +44,7 @@ export default function Step3CuratorChoice({
           <div className="flex items-start gap-4">
             <div className="text-3xl">🎵</div>
             <div className="flex-1">
-              <h3 className="text-xl font-bold mb-2">I want to curate music</h3>
+              <h3 className="text-xl font-bold mb-2">Curate Music</h3>
               <p className="text-sm opacity-90">
                 Share up to 10 tracks per week with context and curation. Build a following based on your taste and help others discover music.
               </p>
@@ -67,7 +67,7 @@ export default function Step3CuratorChoice({
           <div className="flex items-start gap-4">
             <div className="text-3xl">🎧</div>
             <div className="flex-1">
-              <h3 className="text-xl font-bold mb-2">I just want to discover music</h3>
+              <h3 className="text-xl font-bold mb-2">Discover Music</h3>
               <p className="text-sm opacity-90">
                 Follow curators whose taste matches yours. Save drops you love and explore a personalized feed of music recommendations.
               </p>

@@ -241,11 +241,22 @@ export default function OnboardingPage() {
               />
             )}
 
-            {step === 5 && userId && (
-              <Step5RecommendedCurators
-                data={data}
-                userId={userId}
-              />
+            {step === 5 && (
+              <>
+                {!userId ? (
+                  <div className="bg-gray-800 rounded-lg p-8">
+                    <div className="flex flex-col items-center justify-center py-12">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mb-4"></div>
+                      <p className="text-gray-400">Loading recommendations...</p>
+                    </div>
+                  </div>
+                ) : (
+                  <Step5RecommendedCurators
+                    data={data}
+                    userId={userId}
+                  />
+                )}
+              </>
             )}
           </>
         )}
