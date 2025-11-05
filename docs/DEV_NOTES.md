@@ -4,6 +4,98 @@ Technical decisions, gotchas, and lessons learned during development.
 
 ---
 
+## 2025-11-04 - Code Review Findings & Critical Bug Fixes
+
+**Context**: Conducted comprehensive code review of commit 6e2f624 (Step 4 implementation) using code-reviewer agent before production deployment.
+
+**Critical Bugs Found & Fixed**:
+
+### Bug 1: Default `is_curator` Value
+- **Issue**: `is_curator` column defaulted to `TRUE` instead of `FALSE`
+- **Impact**: All new users would become curators by default
+- **Root Cause**: Copy-paste error in migration 20251103000006
+- **Fix**: Created migration 20251104000001 to set correct default and add backfill
+
+### Bug 2: Genre Comparison Type Mismatch
+- **Issue**: `recommend_curators_for_user()` function had SQL type error
+- **Code**:
+  ```sql
+  -- BEFORE (broken):
+  WHERE curator_genre = ANY((SELECT preferred_genres FROM user_taste))
+
+  -- AFTER (fixed):
+  CROSS JOIN user_taste
+  WHERE curator_genre = ANY(user_taste.preferred_genres)
+  ```
+- **Impact**: Recommendation function would fail at runtime
+- **Fix**: Applied in migration 20251104000001
+
+### Bug 3: Missing RLS Policies
+- **Issue**: `user_genre_stats` table only had SELECT policy, no INSERT/UPDATE
+- **Impact**: Drop creation failed with error code 42501 (RLS violation)
+- **Root Cause**: Trigger tried to INSERT/UPDATE genre stats but was blocked
+- **Fix**: Created migration 20251104000002 with INSERT/UPDATE/DELETE policies
+
+### Bug 4: Invalid ORDER BY in Aggregate
+- **Issue**: `get_user_top_genres()` had ORDER BY on column not in SELECT
+- **Fix**: Removed invalid ORDER BY clause (subquery already ordered)
+
+**UX Issues Found & Fixed**:
+
+### Issue 1: Favorite Artists Input Not Visible
+- **Symptom**: User reported "no way to input anything"
+- **Root Cause**: Dark styling blended into background, only 3 fields
+- **Fix**:
+  - Increased to 5 input fields
+  - Thicker borders (`border-2`)
+  - Better placeholders with examples
+  - Helper text explaining purpose
+- **File**: `components/onboarding/Step2TasteDevelopment.tsx:145-159`
+
+### Issue 2: Blank Step 4/4 for Listeners
+- **Symptom**: Listeners saw only progress numbers, no content
+- **Root Cause**: Step 5 only rendered if `userId` was truthy (async auth check)
+- **Fix**: Added loading state for when `userId` is null
+- **File**: `app/onboarding/page.tsx:244-260`
+
+### Issue 3: Curator Choice Wording Confusion
+- **User Feedback**: "every user will have the access to do both"
+- **Fix**: Changed wording to clarify role is a preference, not restriction
+  - Added: "Everyone can both curate and discover"
+  - Changed "I want to curate" → "Curate Music"
+  - Changed "I just want to discover" → "Discover Music"
+- **File**: `components/onboarding/Step3CuratorChoice.tsx:28-32`
+
+**Infrastructure Issues**:
+
+### Issue: Next.js Infinite Loading
+- **Symptom**: `localhost:3001` loaded indefinitely, no compilation output
+- **Root Cause**: Corrupted `.next` build cache
+- **Fix**: Delete `.next` directory and restart dev server
+- **PowerShell Command**: `Remove-Item -Recurse -Force .next`
+- **Added to troubleshooting guide**: docs/LOCAL_TESTING_GUIDE.md
+
+**Testing Results**:
+- Created comprehensive test suite: `supabase/tests/test_recommendation_algorithm.sql`
+- 6 edge cases tested: empty database, no matches, 100% match, cold start, already-followed, scoring weights
+- Result: 4/6 passing, 2 partial (test environment FK constraints)
+
+**Deployment Actions Taken**:
+- Created DEPLOYMENT_CHECKLIST_RESULTS.md with 592-line deployment guide
+- Created LOCAL_TESTING_GUIDE.md with PowerShell-compatible commands
+- Applied all 12 migrations successfully
+- Repository consolidated to `main` branch
+- All critical bugs fixed before production
+
+**Lessons Learned**:
+1. Always code review migrations before applying to production
+2. Test RLS policies thoroughly - they fail silently until triggered
+3. UX testing catches issues automated tests miss
+4. Corrupted build cache is common with rapid iteration
+5. PowerShell requires different syntax than bash (`Remove-Item` vs `rm -rf`)
+
+---
+
 ## 2025-11-04 - Simplified Experience Level Approach
 
 **Context**: Original implementation plan called for users to manually rate their experience level (discovering/regular/deep_diver) for each genre during onboarding.

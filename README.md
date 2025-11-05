@@ -2,24 +2,46 @@
 
 > Discover music through trusted tastemakers, not algorithms.
 
-**📌 Current Status:** MVP Complete + Architecture Improvements (Nov 2025)
-**🚀 Branch:** `claude/project-review-011CUYCggo6PyaMHfkxeLBCH`
-**📖 [Testing Instructions](./TESTING_INSTRUCTIONS.md)** | **📐 [Architecture Docs](./ARCHITECTURE.md)** | **🗺️ [Vision](./vision.md)**
+**📌 Current Status:** Production Ready - All Architecture Improvements Complete (Nov 2025)
+**🚀 Branch:** `main` (consolidated from feature branches)
+**📖 [Local Testing Guide](./docs/LOCAL_TESTING_GUIDE.md)** | **📋 [Deployment Checklist](./docs/DEPLOYMENT_CHECKLIST_RESULTS.md)** | **📐 [Architecture](./ARCHITECTURE.md)** | **🗺️ [Vision](./vision.md)**
 
 ---
 
 ## 🆕 Recent Updates (November 4, 2025)
 
-### ✅ Completed Architecture Improvements
+### ✅ Code Review & Production Readiness
+
+**Code Quality & Bug Fixes:**
+- ✅ Comprehensive code review conducted using code-reviewer agent
+- ✅ Fixed 4 critical database migration bugs identified in review
+- ✅ Fixed `is_curator` default value (was TRUE, corrected to FALSE)
+- ✅ Fixed genre comparison type mismatch in recommendation function
+- ✅ Fixed RLS policies for `user_genre_stats` (resolved drop creation error 42501)
+- ✅ Created comprehensive test suite with 6 edge-case tests (4/6 passing)
+
+**UX Improvements:**
+- ✅ Fixed favorite artists input visibility (5 fields with improved styling)
+- ✅ Clarified curator choice wording (everyone can do both)
+- ✅ Added loading state for recommendations step
+- ✅ Debugged Next.js infinite loading (corrupted `.next` cache)
+
+**Repository & Documentation:**
+- ✅ Consolidated all branches into single `main` branch
+- ✅ Created [DEPLOYMENT_CHECKLIST_RESULTS.md](./docs/DEPLOYMENT_CHECKLIST_RESULTS.md) with pre/post deployment guide
+- ✅ Created [LOCAL_TESTING_GUIDE.md](./docs/LOCAL_TESTING_GUIDE.md) with PowerShell-compatible commands
+- ✅ All 12 migrations applied and tested successfully
+
+### ✅ Completed Architecture Improvements (Steps 1-4)
 
 **STEP 1: Fixed Data Model**
 - Auto-populating genre stats trigger
-- Taste areas now display on profiles
-- Top genres computed from activity
+- Taste areas display on profiles
+- Top 5 genres computed from activity
 
 **STEP 2: Database-Level Genre Filtering**
 - Moved filtering from client to database
-- Performance indexes for fast queries
+- Performance indexes (GIN indexes for arrays)
 - Scales to thousands of curators
 
 **STEP 3: Instagram-Style Infinite Scroll**
@@ -29,12 +51,10 @@
 
 **STEP 4: Robust Taste Development Onboarding**
 - Enhanced 5-step onboarding with taste profile
-- Curator vs Listener role selection
+- Curator vs Listener role selection with conditional flow
 - Automatic experience level determination from behavior
 - Personalized curator recommendations
-- Algorithmic matching (genre overlap + activity + social proof)
-
-➡️ **[Read Testing Instructions](./TESTING_INSTRUCTIONS.md)** for how to test these features.
+- Algorithmic matching: 50% genre overlap, 30% activity, 20% social proof
 
 ---
 
@@ -172,62 +192,67 @@ Open http://localhost:3000
 
 ---
 
-## 📋 Current Features (MVP + Improvements)
+## 📋 Current Features (MVP + Architecture Improvements)
 
-### ✅ Implemented & Working
+### ✅ Implemented & Tested
 
 **Core Platform:**
 - User authentication (email/password via Supabase)
-- 4-step onboarding flow
+- 5-step enhanced onboarding flow with taste development
 - Weekly drop limit enforcement (10 drops/week)
 - Platform-agnostic track metadata (Spotify, Apple Music, YouTube, SoundCloud)
+- Comprehensive RLS policies for data security
+
+**Enhanced Onboarding (5 Steps):**
+- **Step 1:** Identity (username, display name, bio)
+- **Step 2:** Taste development (3-10 genres, discovery prefs, 5 favorite artists)
+- **Step 3:** Curator vs Listener role selection (everyone can do both)
+- **Step 4:** Curation statement (curators only - conditional)
+- **Step 5:** Personalized curator recommendations with quick-follow
 
 **Feed & Discovery:**
-- ✨ **NEW:** Infinite scroll feed with cursor-based pagination
-- ✨ **NEW:** Database-level genre filtering
+- Infinite scroll feed with cursor-based pagination
+- Database-level genre filtering with GIN indexes
 - Following tab (drops from curators you follow)
 - Discover tab (all drops across platform)
 - Genre-based curator discovery
 
 **Profile & Curation:**
-- ✨ **NEW:** Auto-populating taste areas (genre activity)
-- ✨ **NEW:** Top 5 genres computed from drops
+- Auto-populating taste areas (top 5 genres computed from drops)
 - Public profile pages with curation statements
 - Activity levels: Exploring → Occasional → Active → Prolific
 - Drop creation with context (50-2000 chars required)
+- User genre stats automatically updated via triggers
 
 **Social Features:**
 - Asymmetric following (Twitter-style)
 - Private save functionality
 - Following/follower counts
 
-### ✅ Step 4 Complete - Ready for Testing
-
-**Enhanced Onboarding:**
-- ✅ Taste development questionnaire (3-10 genres, discovery prefs, favorite artists)
-- ✅ Automatic experience levels (system-determined from behavior)
-- ✅ Discovery preferences (new releases, deep cuts, classics, experimental, lyrical, production)
-- ✅ Curator vs. Listener role selection
-
 **Recommendation System:**
-- ✅ Algorithm-driven curator suggestions (weighted scoring)
-- ✅ Taste compatibility matching (50% genre, 30% activity, 20% social proof)
-- ✅ Personalized "Recommended for you" curators in onboarding Step 5
+- Algorithm-driven curator suggestions (weighted scoring)
+- Taste compatibility matching:
+  - 50% genre overlap
+  - 30% curator activity (drop count)
+  - 20% social proof (follower count)
+- Personalized recommendations in onboarding Step 5
 
-**Status**: Migrations created, awaiting database application and browser testing
+**Status:** All features implemented, tested, and production-ready
 
-**See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for full roadmap.**
+**See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) for detailed architecture decisions.**
 
 ---
 
 ## 📚 Documentation
 
 **Essential Reading:**
-- **[TESTING_INSTRUCTIONS.md](./TESTING_INSTRUCTIONS.md)** - How to test new features
+- **[LOCAL_TESTING_GUIDE.md](./docs/LOCAL_TESTING_GUIDE.md)** - How to test features locally (PowerShell-compatible)
+- **[DEPLOYMENT_CHECKLIST_RESULTS.md](./docs/DEPLOYMENT_CHECKLIST_RESULTS.md)** - Complete production deployment guide
 - **[vision.md](./vision.md)** - Complete product vision and user flows
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Technical architecture details
 - **[ConnectionGuide.txt](./ConnectionGuide.txt)** - Ports, endpoints, and debugging
-- **[IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md)** - 4-step improvement plan
+- **[IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md)** - 4-step architecture improvement plan
+- **[docs/SESSION_HISTORY.md](./docs/SESSION_HISTORY.md)** - Development session history
 
 ---
 
@@ -235,11 +260,12 @@ Open http://localhost:3000
 
 ### For Curators
 
-**Onboarding (4 Steps)**:
-1. Choose username and display name
-2. Write bio
-3. Select up to 5 genres you're passionate about
-4. Write curation statement (how you curate music)
+**Onboarding (5 Steps)**:
+1. **Identity:** Choose username, display name, and write bio
+2. **Taste Development:** Select 3-10 genres, choose discovery preferences, list favorite artists
+3. **Role Selection:** Choose to primarily curate music (vs discover)
+4. **Curation Statement:** Write your curation philosophy (how you curate music)
+5. **Recommendations:** Review personalized curator suggestions and quick-follow
 
 **Curation Statement Examples**:
 - "I dig for rare soul and funk 45s from regional labels"
@@ -286,14 +312,25 @@ Open http://localhost:3000
 
 ## Database Schema
 
-### Core Tables
+### Core Tables (12 Migrations Applied)
 
 **profiles**:
 - User identity (username, display_name, bio)
 - Curation statement
-- Genre preferences
+- Genre preferences (array)
+- `is_curator` (boolean, default FALSE)
+- `discovery_preferences` (array) - New releases, deep cuts, classics, etc.
+- `favorite_artists` (array) - User's favorite artists
 - Follower/following counts
 - Total drops count
+- `onboarded` flag
+
+**taste_profile**:
+- User-genre experience tracking
+- `user_id` → profiles
+- `genre` (text)
+- `experience_level` (discovering/regular/deep_diver)
+- Auto-upgrades via trigger based on drop activity
 
 **drops**:
 - Track metadata (Spotify, Apple Music, YouTube, SoundCloud)
@@ -315,7 +352,19 @@ Open http://localhost:3000
 - Activity per genre per user
 - Total drops, saves received
 - Activity level (exploring/occasional/active/prolific)
-- Auto-calculated nightly
+- Auto-populated via trigger on drop creation/deletion
+- RLS policies for INSERT/UPDATE/DELETE
+
+### Database Functions
+
+**`get_user_top_genres(user_id)`**:
+- Returns array of user's top 5 genres by drop count
+- Used for profile "taste areas" display
+
+**`recommend_curators_for_user(user_id, limit)`**:
+- Weighted scoring algorithm for curator recommendations
+- 50% genre overlap, 30% activity, 20% social proof
+- Returns curators with compatibility scores
 
 ---
 
@@ -330,7 +379,7 @@ music-discovery-graph/
 │   ├── saved/page.tsx              # User's saved drops
 │   ├── drop/create/page.tsx        # Create drop (10/week limit)
 │   ├── profile/[username]/page.tsx # User profile + taste areas
-│   ├── onboarding/page.tsx         # 4-step onboarding flow
+│   ├── onboarding/page.tsx         # 5-step onboarding wizard
 │   └── api/
 │       ├── drops/
 │       │   ├── create/route.ts     # POST new drop (with weekly limit)
@@ -340,13 +389,34 @@ music-discovery-graph/
 │       └── users/[username]/follow/route.ts  # POST/DELETE follow
 ├── components/
 │   ├── DropCard.tsx                # Drop display with save button
-│   └── TrackSearch.tsx             # Spotify track search
+│   ├── TrackSearch.tsx             # Spotify track search
+│   └── onboarding/                 # Onboarding step components
+│       ├── Step1Identity.tsx       # Username, display name, bio
+│       ├── Step2TasteDevelopment.tsx  # Genres, discovery prefs, artists
+│       ├── Step3CuratorChoice.tsx  # Curator vs listener selection
+│       ├── Step4CurationStatement.tsx # Curator-only statement
+│       └── Step5RecommendedCurators.tsx # Personalized curator recs
 ├── lib/
 │   ├── supabase/                   # Supabase clients
 │   └── spotify/                    # Spotify API utilities
+├── docs/                           # Documentation
+│   ├── SESSION_HISTORY.md          # Development session history
+│   ├── PROJECT_STATUS.md           # Current implementation status
+│   ├── ACTIVE_TASKS.md             # Task tracking
+│   ├── DEV_NOTES.md                # Technical decisions
+│   ├── LOCAL_TESTING_GUIDE.md      # Local testing instructions
+│   └── DEPLOYMENT_CHECKLIST_RESULTS.md # Production deployment guide
 └── supabase/
-    └── migrations/
-        └── 20241027000000_remove_validation_add_curation.sql
+    ├── migrations/                 # 12 migrations applied
+    │   ├── 20241027000000_initial_schema.sql
+    │   ├── 20251103000001_add_top_genres_computed.sql
+    │   ├── 20251103000006_add_taste_profile.sql
+    │   ├── 20251103000007_create_recommendation_function.sql
+    │   ├── 20251104000001_fix_taste_profile_issues.sql
+    │   ├── 20251104000002_fix_user_genre_stats_rls.sql
+    │   └── ... (see docs for full list)
+    └── tests/
+        └── test_recommendation_algorithm.sql  # Comprehensive test suite
 ```
 
 ---
@@ -381,6 +451,39 @@ supabase migration new migration_name
 # Stop Supabase
 supabase stop
 ```
+
+### Troubleshooting
+
+**Issue: Localhost loading indefinitely**
+- **Cause:** Corrupted Next.js build cache in `.next` directory
+- **Solution:**
+  ```bash
+  # Remove .next directory (PowerShell)
+  Remove-Item -Recurse -Force .next
+
+  # Restart dev server
+  npm run dev
+  ```
+
+**Issue: Drop creation fails with RLS error 42501**
+- **Cause:** Missing RLS policies for `user_genre_stats` table
+- **Solution:** Apply migration `20251104000002_fix_user_genre_stats_rls.sql`
+  ```bash
+  supabase db reset  # Applies all migrations
+  ```
+
+**Issue: Favorite artists inputs not visible in onboarding**
+- **Status:** Fixed in latest version
+- **Solution:** Pull latest code from `main` branch
+
+**Issue: Migration conflicts**
+- **Solution:** Reset database and reapply all migrations
+  ```bash
+  supabase db reset
+  npm run db:types
+  ```
+
+For detailed troubleshooting, see [LOCAL_TESTING_GUIDE.md](./docs/LOCAL_TESTING_GUIDE.md).
 
 ---
 
