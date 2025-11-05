@@ -47,7 +47,8 @@ BEGIN
         COALESCE(
           (SELECT COUNT(*)::NUMERIC * 0.5
            FROM unnest(get_user_top_genres(p.id)) curator_genre
-           WHERE curator_genre = ANY((SELECT preferred_genres FROM user_taste))
+           CROSS JOIN user_taste
+           WHERE curator_genre = ANY(user_taste.preferred_genres)
           ),
           0
         ) +

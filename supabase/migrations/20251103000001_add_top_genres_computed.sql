@@ -5,7 +5,7 @@ CREATE OR REPLACE FUNCTION get_user_top_genres(user_uuid UUID)
 RETURNS TEXT[] AS $$
 BEGIN
   RETURN (
-    SELECT ARRAY_AGG(genre ORDER BY total_drops DESC)
+    SELECT ARRAY_AGG(genre)
     FROM (
       SELECT genre
       FROM user_genre_stats

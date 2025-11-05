@@ -1,6 +1,6 @@
 -- Add taste profile fields to profiles table
 ALTER TABLE profiles
-ADD COLUMN IF NOT EXISTS is_curator BOOLEAN DEFAULT TRUE,
+ADD COLUMN IF NOT EXISTS is_curator BOOLEAN DEFAULT FALSE,
 ADD COLUMN IF NOT EXISTS discovery_preferences TEXT[] DEFAULT ARRAY[]::TEXT[],
 ADD COLUMN IF NOT EXISTS favorite_artists TEXT[] DEFAULT ARRAY[]::TEXT[];
 
