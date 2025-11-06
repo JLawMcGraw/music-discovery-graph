@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
 
 export async function POST(
   request: Request,
@@ -16,6 +17,28 @@ export async function POST(
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Rate limiting: 50 follow actions per minute
+    const rateLimit = checkRateLimit(
+      `follow:${user.id}`,
+      RATE_LIMITS.FOLLOW.limit,
+      RATE_LIMITS.FOLLOW.window
+    )
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        {
+          error: 'Too many requests',
+          retryAfter: rateLimit.retryAfter,
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(rateLimit.retryAfter),
+          },
+        }
+      )
     }
 
     // Get target user by username
@@ -79,6 +102,28 @@ export async function DELETE(
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Rate limiting: 50 unfollow actions per minute
+    const rateLimit = checkRateLimit(
+      `follow:${user.id}`,
+      RATE_LIMITS.FOLLOW.limit,
+      RATE_LIMITS.FOLLOW.window
+    )
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        {
+          error: 'Too many requests',
+          retryAfter: rateLimit.retryAfter,
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(rateLimit.retryAfter),
+          },
+        }
+      )
     }
 
     // Get target user by username

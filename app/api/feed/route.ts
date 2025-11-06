@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
+import { logError, logWarn } from '@/lib/logger'
 
 const feedQuerySchema = z.object({
   tab: z.enum(['following', 'discover']).default('following'),
@@ -20,6 +22,28 @@ export async function GET(request: Request) {
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Rate limiting: 100 feed requests per minute
+    const rateLimit = checkRateLimit(
+      `feed:${user.id}`,
+      RATE_LIMITS.FEED.limit,
+      RATE_LIMITS.FEED.window
+    )
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        {
+          error: 'Too many requests',
+          retryAfter: rateLimit.retryAfter,
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(rateLimit.retryAfter),
+          },
+        }
+      )
     }
 
     // Parse query parameters
@@ -51,7 +75,7 @@ export async function GET(request: Request) {
         })
       }
 
-      // Build query for following feed
+      // Build query for following feed with LEFT JOIN for saves (eliminates N+1 query)
       let query = supabase
         .from('drops')
         .select(`
@@ -61,9 +85,13 @@ export async function GET(request: Request) {
             display_name,
             avatar_url,
             follower_count
+          ),
+          drop_saves!left (
+            drop_id
           )
         `)
         .in('user_id', followingIds)
+        .eq('drop_saves.user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(params.limit + 1) // Fetch one extra to check if more exist
 
@@ -75,13 +103,19 @@ export async function GET(request: Request) {
       const { data, error } = await query
 
       if (error) {
-        console.error('Feed query error:', error)
+        logError('Feed query failed for following tab', {
+          userId: user.id,
+          endpoint: '/api/feed',
+          method: 'GET',
+          error: error as Error,
+          metadata: { tab: 'following', cursor: params.cursor },
+        })
         return NextResponse.json({ error: 'Failed to fetch feed' }, { status: 500 })
       }
 
       drops = data || []
     } else {
-      // Discover tab: all drops
+      // Discover tab: all drops with LEFT JOIN for saves
       let query = supabase
         .from('drops')
         .select(`
@@ -91,8 +125,12 @@ export async function GET(request: Request) {
             display_name,
             avatar_url,
             follower_count
+          ),
+          drop_saves!left (
+            drop_id
           )
         `)
+        .eq('drop_saves.user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(params.limit + 1)
 
@@ -100,10 +138,16 @@ export async function GET(request: Request) {
         query = query.lt('created_at', params.cursor)
       }
 
-      const { data, error } = await query
+      const { data, error} = await query
 
       if (error) {
-        console.error('Discover query error:', error)
+        logError('Feed query failed for discover tab', {
+          userId: user.id,
+          endpoint: '/api/feed',
+          method: 'GET',
+          error: error as Error,
+          metadata: { tab: 'discover', cursor: params.cursor },
+        })
         return NextResponse.json({ error: 'Failed to fetch drops' }, { status: 500 })
       }
 
@@ -121,20 +165,11 @@ export async function GET(request: Request) {
     // Get next cursor (created_at of last item)
     const nextCursor = drops.length > 0 ? drops[drops.length - 1].created_at : null
 
-    // Check if user has saved each drop
-    const dropIds = drops.map(d => d.id)
-    const { data: savedDrops } = await supabase
-      .from('drop_saves')
-      .select('drop_id')
-      .eq('user_id', user.id)
-      .in('drop_id', dropIds)
-
-    const savedDropIds = new Set(savedDrops?.map(s => s.drop_id) || [])
-
-    // Add isSaved flag to each drop
-    const dropsWithSaveStatus = drops.map(drop => ({
+    // Add isSaved flag based on LEFT JOIN result
+    const dropsWithSaveStatus = drops.map((drop: any) => ({
       ...drop,
-      isSaved: savedDropIds.has(drop.id)
+      isSaved: drop.drop_saves && drop.drop_saves.length > 0,
+      drop_saves: undefined, // Remove from response
     }))
 
     return NextResponse.json({

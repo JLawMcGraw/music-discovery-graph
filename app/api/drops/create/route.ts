@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
 
 const createDropSchema = z.object({
   track_id: z.string().min(1),
@@ -29,6 +30,29 @@ export async function POST(request: Request) {
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Rate limiting: 20 drop creates per minute
+    const rateLimit = checkRateLimit(
+      `drop_create:${user.id}`,
+      RATE_LIMITS.DROP_CREATE.limit,
+      RATE_LIMITS.DROP_CREATE.window
+    )
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        {
+          error: 'Too many requests',
+          message: 'Please slow down. You can create drops at a maximum rate of 20 per minute.',
+          retryAfter: rateLimit.retryAfter,
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(rateLimit.retryAfter),
+          },
+        }
+      )
     }
 
     // Parse and validate request body

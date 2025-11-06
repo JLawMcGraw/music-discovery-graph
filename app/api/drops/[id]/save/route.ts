@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
 
 export async function POST(
   request: Request,
@@ -16,6 +17,28 @@ export async function POST(
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Rate limiting: 50 save actions per minute
+    const rateLimit = checkRateLimit(
+      `save:${user.id}`,
+      RATE_LIMITS.SAVE_DROP.limit,
+      RATE_LIMITS.SAVE_DROP.window
+    )
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        {
+          error: 'Too many requests',
+          retryAfter: rateLimit.retryAfter,
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(rateLimit.retryAfter),
+          },
+        }
+      )
     }
 
     const dropId = params.id
@@ -73,6 +96,28 @@ export async function DELETE(
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Rate limiting: 50 unsave actions per minute
+    const rateLimit = checkRateLimit(
+      `save:${user.id}`,
+      RATE_LIMITS.SAVE_DROP.limit,
+      RATE_LIMITS.SAVE_DROP.window
+    )
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        {
+          error: 'Too many requests',
+          retryAfter: rateLimit.retryAfter,
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(rateLimit.retryAfter),
+          },
+        }
+      )
     }
 
     const dropId = params.id

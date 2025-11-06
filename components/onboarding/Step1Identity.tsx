@@ -18,10 +18,29 @@ export default function Step1Identity({ data, updateData, onNext }: Step1Props) 
   const [username, setUsername] = useState(data.username || '')
   const [displayName, setDisplayName] = useState(data.display_name || '')
   const [bio, setBio] = useState(data.bio || '')
+  const [usernameError, setUsernameError] = useState<string | null>(null)
 
   const handleNext = () => {
+    const trimmedUsername = username.toLowerCase().trim()
+
+    // Validate username
+    if (!trimmedUsername || trimmedUsername.length < 3) {
+      setUsernameError('Username must be at least 3 characters long')
+      return
+    }
+
+    if (trimmedUsername.length > 50) {
+      setUsernameError('Username must be 50 characters or less')
+      return
+    }
+
+    if (!/^[a-z0-9_]+$/.test(trimmedUsername)) {
+      setUsernameError('Username can only contain lowercase letters, numbers, and underscores')
+      return
+    }
+
     updateData({
-      username: username.toLowerCase().trim(),
+      username: trimmedUsername,
       display_name: displayName.trim() || username,
       bio: bio.trim(),
     })
@@ -43,14 +62,32 @@ export default function Step1Identity({ data, updateData, onNext }: Step1Props) 
           id="username"
           type="text"
           value={username}
-          onChange={(e) => setUsername(e.target.value.replace(/[^a-z0-9_]/g, ''))}
+          onChange={(e) => {
+            setUsername(e.target.value.replace(/[^a-z0-9_]/g, ''))
+            setUsernameError(null)
+          }}
           pattern="[a-z0-9_]+"
           required
+          minLength={3}
           maxLength={50}
-          className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className={`w-full px-4 py-2 bg-gray-900 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 ${
+            usernameError
+              ? 'border-red-500 focus:ring-red-500'
+              : 'border-gray-700 focus:ring-purple-500'
+          }`}
           placeholder="music_lover_23"
+          aria-invalid={!!usernameError}
+          aria-describedby={usernameError ? 'username-error' : 'username-help'}
         />
-        <p className="text-xs text-gray-500 mt-1">Lowercase letters, numbers, and underscores only</p>
+        {usernameError ? (
+          <p id="username-error" className="text-xs text-red-400 mt-1" role="alert">
+            {usernameError}
+          </p>
+        ) : (
+          <p id="username-help" className="text-xs text-gray-500 mt-1">
+            Lowercase letters, numbers, and underscores only
+          </p>
+        )}
       </div>
 
       <div>

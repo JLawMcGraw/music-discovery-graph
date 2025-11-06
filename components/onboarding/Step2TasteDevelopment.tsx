@@ -41,12 +41,17 @@ export default function Step2TasteDevelopment({
       ? data.favoriteArtists
       : ['', '', '', '', '']
   )
+  const [validationError, setValidationError] = useState<string | null>(null)
 
   const toggleGenre = (genre: string) => {
     if (selectedGenres.includes(genre)) {
       setSelectedGenres(selectedGenres.filter((g) => g !== genre))
     } else if (selectedGenres.length < 10) {
       setSelectedGenres([...selectedGenres, genre])
+    }
+    // Clear validation error when user makes changes
+    if (validationError) {
+      setValidationError(null)
     }
   }
 
@@ -61,7 +66,7 @@ export default function Step2TasteDevelopment({
   const handleNext = () => {
     // Validate: at least 3 genres
     if (selectedGenres.length < 3) {
-      alert('Please select at least 3 genres')
+      setValidationError('Please select at least 3 genres to continue')
       return
     }
 
@@ -108,6 +113,13 @@ export default function Step2TasteDevelopment({
         <p className="text-sm text-gray-400">
           {selectedGenres.length}/10 genres selected (minimum 3)
         </p>
+
+        {/* Validation Error */}
+        {validationError && (
+          <div className="mt-4 bg-red-900/20 border border-red-500 rounded-lg p-4 text-red-400 text-sm">
+            {validationError}
+          </div>
+        )}
       </div>
 
       {/* Discovery Preferences */}

@@ -28,6 +28,7 @@ export default function Step5RecommendedCurators({ data, userId }: Step5Props) {
   const [completing, setCompleting] = useState(false)
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
+  const [followError, setFollowError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchRecommendations()
@@ -60,6 +61,7 @@ export default function Step5RecommendedCurators({ data, userId }: Step5Props) {
 
   const handleFollow = async (curatorId: string) => {
     try {
+      setFollowError(null)
       const supabase = createClient()
 
       if (followedIds.has(curatorId)) {
@@ -92,7 +94,9 @@ export default function Step5RecommendedCurators({ data, userId }: Step5Props) {
       }
     } catch (err) {
       console.error('Follow error:', err)
-      alert('Failed to update follow status')
+      setFollowError('Failed to update follow status. Please try again.')
+      // Auto-dismiss error after 5 seconds
+      setTimeout(() => setFollowError(null), 5000)
     }
   }
 
@@ -124,6 +128,12 @@ export default function Step5RecommendedCurators({ data, userId }: Step5Props) {
       {error && (
         <div className="bg-red-900/20 border border-red-500 rounded-lg p-4 text-red-400 text-sm mb-6">
           {error}
+        </div>
+      )}
+
+      {followError && (
+        <div className="bg-red-900/20 border border-red-500 rounded-lg p-4 text-red-400 text-sm mb-6">
+          {followError}
         </div>
       )}
 

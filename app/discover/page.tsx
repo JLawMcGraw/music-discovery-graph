@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Image from 'next/image'
 import { DiscoverFilters } from '@/components/DiscoverFilters'
+import { Curator } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,6 +48,8 @@ export default async function DiscoverPage({
     console.error('Failed to fetch curators:', curatorsError)
   }
 
+  const curatorsList: Curator[] = curators || []
+
   // Get following list for current user
   let followingIds: string[] = []
   if (currentUser) {
@@ -80,9 +83,9 @@ export default async function DiscoverPage({
         <DiscoverFilters genres={uniqueGenres} />
 
         {/* Curators Grid */}
-        {curators.length > 0 ? (
+        {curatorsList.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {curators.map((curator) => {
+            {curatorsList.map((curator: Curator) => {
               const isFollowing = followingIds.includes(curator.id)
               const isOwnProfile = currentUser?.id === curator.id
 
@@ -130,7 +133,7 @@ export default async function DiscoverPage({
                       {/* Genres */}
                       {curator.top_genres && curator.top_genres.length > 0 && (
                         <div className="flex flex-wrap gap-1 mb-3">
-                          {curator.top_genres.slice(0, 3).map((genre) => (
+                          {curator.top_genres.slice(0, 3).map((genre: string) => (
                             <span
                               key={genre}
                               className="px-2 py-1 bg-gray-900 text-gray-400 text-xs rounded"

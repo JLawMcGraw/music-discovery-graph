@@ -2,29 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { DropCard } from './DropCard'
-
-interface Drop {
-  id: string
-  track_name: string
-  artist_name: string
-  album_name?: string
-  album_art_url?: string
-  context: string
-  listening_notes?: string
-  genres?: string[]
-  moods?: string[]
-  platform: string
-  external_url?: string
-  preview_url?: string
-  created_at: string
-  isSaved: boolean
-  profiles: {
-    username: string
-    display_name?: string
-    avatar_url?: string
-    follower_count?: number
-  }
-}
+import { Drop } from '@/lib/types'
 
 interface InfiniteScrollFeedProps {
   initialDrops: Drop[]

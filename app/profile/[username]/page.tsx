@@ -142,7 +142,7 @@ export default async function ProfilePage({ params }: Props) {
                 {/* Genre Preferences */}
                 {profile.genre_preferences && profile.genre_preferences.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-4">
-                    {profile.genre_preferences.map((genre) => (
+                    {profile.genre_preferences.map((genre: string) => (
                       <span
                         key={genre}
                         className="px-3 py-1 bg-gray-900 text-gray-300 text-sm rounded-full border border-gray-700"
